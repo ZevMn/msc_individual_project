@@ -172,3 +172,7 @@ outputs2/
 pretrained_models/
 *.pth
 .DS_Store
+
+# SLURM / cluster artefacts
+cluster/*.log
+cluster/*.slurm

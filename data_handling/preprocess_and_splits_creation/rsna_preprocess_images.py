@@ -8,6 +8,12 @@ you need to specify in default_paths.py
 import numpy as np
 import pandas as pd
 import pydicom
+
+import sys
+import os
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.append(ROOT_DIR) # Add project root to sys.path
+
 from default_paths import DATA_DIR_RSNA, DATA_DIR_RSNA_PROCESSED_IMAGES
 
 from PIL import Image
