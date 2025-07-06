@@ -359,22 +359,43 @@ class ResNetBase(torch.nn.Module):
                 input_channels, 64, kernel_size=7, stride=2, padding=3, bias=False
             )
 
-    def get_features(self, x: torch.Tensor, include_early_feats=False) -> torch.Tensor:
+    def get_features(
+            self, 
+            x: torch.Tensor, 
+            include_early_feats: bool=False, 
+            return_all_layers: bool=False
+            ) -> torch.Tensor | tuple | dict:
+
+        out={}
+
         x = self.net.conv1(x)
         x = self.net.bn1(x)
         x = self.net.relu(x)
         x0 = self.net.maxpool(x)
+        out["after_maxpool"] = x0
+        # NB: At a later date, make more efficient by changing all variables xi to x.
+
         x1 = self.net.layer1(x0)
+        out["layer_1"] = x1
         x2 = self.net.layer2(x1)
+        out["layer_2"] = x2
         x3 = self.net.layer3(x2)
+        out["layer_3"] = x3
         x4 = self.net.layer4(x3)
-        x4 = self.net.avgpool(x4)
-        x4 = torch.flatten(x4, 1)
-        if self.normalise_features:
-            x4 = normalize(x4, dim=1)
-        if include_early_feats:
-            return self.net.avgpool(x1).flatten(1), x4
-        return x4
+        out["layer_4"] = x4
+        x_avgpool = self.net.avgpool(x4)
+        out["avgpool"] = x_avgpool
+
+        x_out = torch.flatten(x_avgpool, 1)
+        out["flattened"] = normalize(x_out, dim=1) if self.normalise_features else x_out
+
+        if return_all_layers:
+            return out
+        elif include_early_feats:
+            return self.net.avgpool(out["layer1"]).flatten(1), out["flattened"]
+        else:
+            return out["flattened"]
+
 
     def classify_features(self, x: torch.Tensor) -> torch.Tensor:
         return self.net.fc(x)

@@ -1,6 +1,7 @@
 from default_paths import PATH_TO_SIMCLR_IMAGENET
 import torch
 
+from collections import defaultdict
 from pathlib import Path
 import pickle
 
@@ -26,7 +27,12 @@ def get_ids_from_model_names(encoder_name, model_name):
 
 
 def get_or_save_outputs(
-    model_to_evaluate, encoder_to_evaluate, val_loader, test_loader, dataset_name
+    model_to_evaluate, 
+    encoder_to_evaluate, 
+    val_loader, 
+    test_loader, 
+    dataset_name,
+    feat_mode: str = "final",  # options: "final", "early", "all"
 ):
     """
     Inference loop. If already saved simply returns dictionary of outputs.
@@ -42,6 +48,7 @@ def get_or_save_outputs(
     encoder_filename = outputs_dir / f"encoder_{encoder_id}.pkl"
     print(model_filename, encoder_filename)
     compute_task, compute_encoder = True, True
+
     if model_filename.exists():
         with open(str(model_filename), "rb") as fp:
             task_output = pickle.load(fp)
@@ -125,6 +132,8 @@ def get_or_save_outputs(
             probas = []
             encoder_feats = []
             encoder_early_feats = []
+            all_features = defaultdict(list)
+
             with torch.no_grad():
                 for batch in tqdm(loader):
                     x = batch["x"].cuda()
@@ -141,14 +150,22 @@ def get_or_save_outputs(
                         if encoder.input_channels == 3 and x.shape[1] == 1:
                             x = torch.repeat_interleave(x, 3, 1)
                         try:
-                            feats1, last_feats = encoder.get_features(
-                                x, include_early_feats=True
-                            )
-                            encoder_early_feats.append(feats1.cpu())
-                        except TypeError:
-                            last_feats = encoder.get_features(x)
+                            if feat_mode == "all":
+                                all_layer_feats = encoder.get_features(x, return_all_layers=True)
+                                for layer_name, feat_tensor in all_layer_feats.items():
+                                    all_features[layer_name].append(feat_tensor.cpu())
+                            elif feat_mode == "early":
+                                early_feat, final_feat = encoder.get_features(x, include_early_feats=True)
+                                encoder_early_feats.append(early_feat.cpu())
+                                encoder_feats.append(final_feat.cpu())
+                            else:  # "final"
+                                final_feat = encoder.get_features(x)
+                                encoder_feats.append(final_feat.cpu())
 
-                        encoder_feats.append(last_feats.cpu())
+                        except TypeError as e:
+                            print(f"[Warning] Encoder get_features() failed: {e}")
+                            final_feat = encoder.get_features(x)
+                            encoder_feats.append(final_feat.cpu())
 
             y_val = torch.concatenate(y_val)
 
@@ -163,18 +180,22 @@ def get_or_save_outputs(
                     }
                 )
             if compute_encoder:
-                encoder_feats = torch.concatenate(encoder_feats)
-                if len(encoder_early_feats) > 0:
-                    encoder_early_feats = torch.concatenate(encoder_early_feats)
-                encoder_output.update(
-                    {
-                        name: {
-                            "y": y_val,
-                            "feats": encoder_feats,
-                            "early_feats": encoder_early_feats,
-                        }
-                    }
-                )
+                encoder_output_entry = {
+                    "y": y_val
+                }
+
+                if feat_mode == "all":
+                    for k in all_features:
+                        all_features[k] = torch.concatenate(all_features[k])
+                    encoder_output_entry["feats_by_layer"] = all_features
+                if feat_mode == "early" or feat_mode == "final":
+                    encoder_output_entry["feats"] = torch.concatenate(encoder_feats)
+                if feat_mode == "early":
+                    encoder_output_entry["early_feats"] = torch.concatenate(encoder_early_feats)
+
+                encoder_output[name] = encoder_output_entry
+
+
         if compute_encoder:
             with open(str(encoder_filename), "wb") as fp:
                 pickle.dump(encoder_output, fp)
