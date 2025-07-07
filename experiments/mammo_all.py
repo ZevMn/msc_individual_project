@@ -1,3 +1,4 @@
+import gc
 import pandas as pd
 from pathlib import Path
 
@@ -34,11 +35,11 @@ def run_mammo(model_to_evaluate, encoder_to_evaluate, shift):
 
     val_dataset = EmbedDataset(df=val_df, transform=torch.nn.Identity(), cache=False)
     val_dataloader = DataLoader(
-        val_dataset, batch_size=32, shuffle=False, num_workers=12
+        val_dataset, batch_size=16, shuffle=False, num_workers=1
     )
     test_dataset = EmbedDataset(df=test_df, transform=torch.nn.Identity(), cache=False)
     test_dataloader = DataLoader(
-        test_dataset, batch_size=32, shuffle=False, num_workers=12
+        test_dataset, batch_size=16, shuffle=False, num_workers=1
     )
 
     ### Load model outputs (test + val)
@@ -50,6 +51,10 @@ def run_mammo(model_to_evaluate, encoder_to_evaluate, shift):
         dataset_name="Mammo",
         feat_mode="all",  # options: "final", "early", "all"
     )
+
+    # Cleanup
+    gc.collect()
+    torch.cuda.empty_cache()
 
     ### Define reference set sampling function
     def reference_set_sampling_fn(reference_set_size):

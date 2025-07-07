@@ -22,7 +22,11 @@ def get_ids_from_model_names(encoder_name, model_name):
         else encoder_name
     )
 
-    model_id = Path(model_name).parent.stem[4:]
+    if model_name is None:
+        model_id = "no_model"
+    else:
+        model_id = Path(model_name).parent.stem[4:]
+
     return encoder_id, model_id
 
 
@@ -32,7 +36,7 @@ def get_or_save_outputs(
     val_loader, 
     test_loader, 
     dataset_name,
-    feat_mode: str = "final",  # options: "final", "early", "all"
+    feat_mode: str = "all",  # options: "final", "early", "all"
 ):
     """
     Inference loop. If already saved simply returns dictionary of outputs.
@@ -47,18 +51,23 @@ def get_or_save_outputs(
     print(encoder_id)
     encoder_filename = outputs_dir / f"encoder_{encoder_id}.pkl"
     print(model_filename, encoder_filename)
-    compute_task, compute_encoder = True, True
+    compute_task = model_to_evaluate is not None
+    compute_encoder = True
 
     if model_filename.exists():
         with open(str(model_filename), "rb") as fp:
             task_output = pickle.load(fp)
-            compute_task = False
+            compute_task = model_to_evaluate is not None
     else:
         task_output = {}
+
+    if model_to_evaluate is not None:
         model = ClassificationModule.load_from_checkpoint(
             model_to_evaluate, map_location="cuda:0", strict=False
         ).model.eval()
         model.cuda()
+    else:
+        compute_task = False
 
     if encoder_filename.exists():
         with open(str(encoder_filename), "rb") as fp:
@@ -153,19 +162,19 @@ def get_or_save_outputs(
                             if feat_mode == "all":
                                 all_layer_feats = encoder.get_features(x, return_all_layers=True)
                                 for layer_name, feat_tensor in all_layer_feats.items():
-                                    all_features[layer_name].append(feat_tensor.cpu())
+                                    all_features[layer_name].append(feat_tensor.detach().cpu())
                             elif feat_mode == "early":
                                 early_feat, final_feat = encoder.get_features(x, include_early_feats=True)
-                                encoder_early_feats.append(early_feat.cpu())
-                                encoder_feats.append(final_feat.cpu())
+                                encoder_early_feats.append(early_feat.detach().cpu())
+                                encoder_feats.append(final_feat.detach().cpu())
                             else:  # "final"
                                 final_feat = encoder.get_features(x)
-                                encoder_feats.append(final_feat.cpu())
+                                encoder_feats.append(final_feat.detach().cpu())
 
                         except TypeError as e:
                             print(f"[Warning] Encoder get_features() failed: {e}")
                             final_feat = encoder.get_features(x)
-                            encoder_feats.append(final_feat.cpu())
+                            encoder_feats.append(final_feat.detach().cpu())
 
             y_val = torch.concatenate(y_val)
 
@@ -204,4 +213,12 @@ def get_or_save_outputs(
             with open(str(model_filename), "wb") as fp:
                 pickle.dump(task_output, fp)
                 print("dictionary saved successfully to file")
+
+        # Cleanup
+        if 'model' in locals():
+            del model
+        if 'encoder' in locals():
+            del encoder
+        torch.cuda.empty_cache()
+
     return task_output, encoder_output

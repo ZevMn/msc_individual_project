@@ -371,23 +371,23 @@ class ResNetBase(torch.nn.Module):
         x = self.net.conv1(x)
         x = self.net.bn1(x)
         x = self.net.relu(x)
-        x0 = self.net.maxpool(x)
-        out["after_maxpool"] = x0
-        # NB: At a later date, make more efficient by changing all variables xi to x.
+        x = self.net.maxpool(x)
+        out["after_maxpool"] = x
 
-        x1 = self.net.layer1(x0)
-        out["layer_1"] = x1
-        x2 = self.net.layer2(x1)
-        out["layer_2"] = x2
-        x3 = self.net.layer3(x2)
-        out["layer_3"] = x3
-        x4 = self.net.layer4(x3)
-        out["layer_4"] = x4
-        x_avgpool = self.net.avgpool(x4)
-        out["avgpool"] = x_avgpool
+        x = self.net.layer1(x)
+        out["layer_1"] = x
+        x = self.net.layer2(x)
+        out["layer_2"] = x
+        x = self.net.layer3(x)
+        out["layer_3"] = x
+        x = self.net.layer4(x)
+        out["layer_4"] = x
+        
+        x = self.net.avgpool(x)
+        out["avgpool"] = x
 
-        x_out = torch.flatten(x_avgpool, 1)
-        out["flattened"] = normalize(x_out, dim=1) if self.normalise_features else x_out
+        x = torch.flatten(x, 1)
+        out["flattened"] = normalize(x, dim=1) if self.normalise_features else x
 
         if return_all_layers:
             return out
