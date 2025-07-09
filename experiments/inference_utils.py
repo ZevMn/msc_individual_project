@@ -1,3 +1,4 @@
+import gc
 from default_paths import PATH_TO_SIMCLR_IMAGENET
 import torch
 
@@ -137,7 +138,8 @@ def get_or_save_outputs(
 
     if compute_task or compute_encoder:
         for name, loader in [("val", val_loader), ("test", test_loader)]:
-            y_val = []
+            print(f"Processing {name} set...")
+            y_list = []
             probas = []
             encoder_feats = []
             encoder_early_feats = []
@@ -147,7 +149,7 @@ def get_or_save_outputs(
                 for batch in tqdm(loader):
                     x = batch["x"].cuda()
                     y = batch["y"]
-                    y_val.append(y)
+                    y_list.append(y)
                     if compute_task:
                         probas.append(model(x).cpu())
                     if compute_encoder:
@@ -176,21 +178,22 @@ def get_or_save_outputs(
                             final_feat = encoder.get_features(x)
                             encoder_feats.append(final_feat.detach().cpu())
 
-            y_val = torch.concatenate(y_val)
+            # Concatenate and build the output entry for current dataset
+            y_final = torch.concatenate(y_list)
 
             if compute_task:
-                probas = torch.softmax(torch.concatenate(probas), 1)
+                probas_final = torch.softmax(torch.concatenate(probas), 1)
                 task_output.update(
                     {
                         name: {
-                            "y": y_val,
-                            "probas": probas,
+                            "y": y_final,
+                            "probas": probas_final,
                         }
                     }
                 )
             if compute_encoder:
                 encoder_output_entry = {
-                    "y": y_val
+                    "y": y_final
                 }
 
                 if feat_mode == "all":
@@ -204,17 +207,25 @@ def get_or_save_outputs(
 
                 encoder_output[name] = encoder_output_entry
 
+                # Memory Cleanup
+                del y_list, probas, encoder_feats, encoder_early_feats
+                for k in list(all_features.keys()):
+                    del all_features[k]
+                del all_features
+                gc.collect()
+                torch.cuda.empty_cache()
+
 
         if compute_encoder:
             with open(str(encoder_filename), "wb") as fp:
                 pickle.dump(encoder_output, fp)
-                print("dictionary saved successfully to file")
+                print("Encoder dictionary saved successfully to file")
         if compute_task:
             with open(str(model_filename), "wb") as fp:
                 pickle.dump(task_output, fp)
-                print("dictionary saved successfully to file")
+                print("Task dictionary saved successfully to file")
 
-        # Cleanup
+        # Memory Cleanup
         if 'model' in locals():
             del model
         if 'encoder' in locals():

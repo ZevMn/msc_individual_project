@@ -174,5 +174,9 @@ pretrained_models/
 .DS_Store
 
 # SLURM / cluster artefacts
+cluster/
 cluster/*.log
 cluster/*.slurm
+cluster/old_log_files/
+cluster/store_log_files.py
+

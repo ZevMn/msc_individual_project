@@ -35,11 +35,11 @@ def run_mammo(model_to_evaluate, encoder_to_evaluate, shift):
 
     val_dataset = EmbedDataset(df=val_df, transform=torch.nn.Identity(), cache=False)
     val_dataloader = DataLoader(
-        val_dataset, batch_size=16, shuffle=False, num_workers=1
+        val_dataset, batch_size=32, shuffle=False, num_workers=6
     )
     test_dataset = EmbedDataset(df=test_df, transform=torch.nn.Identity(), cache=False)
     test_dataloader = DataLoader(
-        test_dataset, batch_size=16, shuffle=False, num_workers=1
+        test_dataset, batch_size=32, shuffle=False, num_workers=6
     )
 
     ### Load model outputs (test + val)
@@ -49,7 +49,7 @@ def run_mammo(model_to_evaluate, encoder_to_evaluate, shift):
         val_loader=val_dataloader,
         test_loader=test_dataloader,
         dataset_name="Mammo",
-        feat_mode="all",  # options: "final", "early", "all"
+        feat_mode="early",  # options: "final", "early", "all"
     )
 
     # Cleanup
