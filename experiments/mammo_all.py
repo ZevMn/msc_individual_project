@@ -49,7 +49,7 @@ def run_mammo(model_to_evaluate, encoder_to_evaluate, shift):
         val_loader=val_dataloader,
         test_loader=test_dataloader,
         dataset_name="Mammo",
-        feat_mode="early",  # options: "final", "early", "all"
+        feat_mode="all",  # options: "final", "early", "all"
     )
 
     # Cleanup

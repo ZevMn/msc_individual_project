@@ -13,7 +13,7 @@ from pathlib import Path
 import torch
 
 ENCODER_PICKLE_PATH = Path("experiments/outputs/Mammo/encoder_simclr_imagenet.pkl")
-OUTPUT_DIR = "experiments/outputs/Mammo/Plots" # Output directory relative to the root of the project (string)
+OUTPUT_DIR = "experiments/outputs/Mammo/Plots/" # Output directory relative to the root of the project (string)
 Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)  # Ensure output directory exists
 
 SPLIT = "test"  # "test" or "val"
@@ -229,4 +229,4 @@ if __name__ == "__main__":
             scenario=scenario,
         )
 
-    print(f"\n=== VISUALIZATION COMPLETE FOR SCENARIO: {scenario.upper()} ===")
+    print(f"\n=== VISUALIZATION COMPLETE FOR SCENARIO: {scenario.upper()} ===\n")
