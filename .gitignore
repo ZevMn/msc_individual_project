@@ -180,3 +180,5 @@ cluster/*.slurm
 cluster/old_log_files/
 cluster/store_log_files.py
 
+experiments/run_shift_analysis.py
+

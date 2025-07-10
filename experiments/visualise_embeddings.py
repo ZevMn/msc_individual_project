@@ -2,6 +2,7 @@
 
 import pickle
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -10,11 +11,16 @@ from sklearn.manifold import TSNE
 
 from pathlib import Path
 
+from torch.utils.data import DataLoader
 import torch
 
-ENCODER_PICKLE_PATH = Path("experiments/outputs/Mammo/encoder_simclr_imagenet.pkl")
-OUTPUT_DIR = "experiments/outputs/Mammo/Plots/" # Output directory relative to the root of the project (string)
-Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)  # Ensure output directory exists
+from experiments import shift_generator
+from data_handling.mammo import EmbedDataset
+
+ROOT = Path(__file__).resolve().parent.parent
+ENCODER_PICKLE_PATH = ROOT / "experiments/outputs/Mammo/encoder_simclr_imagenet.pkl"
+OUTPUT_DIR = ROOT / "experiments/outputs/Mammo/Plots/"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)  # Ensure output directory exists
 
 SPLIT = "test"  # "test" or "val"
 
@@ -28,7 +34,7 @@ but they have all been manually reviewed and edited.
 # ------------------------------------
 # Load embeddings with error handling
 # ------------------------------------
-def load_embeddings(file_path):
+def load_embeddings(file_path: Path):
     """
     Load a pickled embeddings object.
 
@@ -116,8 +122,8 @@ def process_and_visualise_layer(
         layer_name: str, 
         features: torch.Tensor, 
         labels: torch.Tensor, 
-        scenario: str, 
-        output_dir: str, 
+        scenario: str,
+        shifted: bool=False, 
         seed: int=42, 
         pca_components: int=2,
         num_samples: int=1000):
@@ -199,7 +205,9 @@ def process_and_visualise_layer(
 
     fig.suptitle(f"Scenario: {scenario.upper()} - {layer_name}", fontsize=14)
 
-    file_location = output_dir + f"{scenario}_{layer_name}_visualisation.png"
+    if shifted:
+        scenario += "_shifted"
+    file_location = OUTPUT_DIR / f"{scenario}_{layer_name}_visualisation.png"
     fig.savefig(file_location)
     plt.close(fig)
 
@@ -210,6 +218,22 @@ def process_and_visualise_layer(
 if __name__ == "__main__":
 
     encoder_output = load_embeddings(ENCODER_PICKLE_PATH)
+
+    # Process the test set
+    print(f"Loading test set from 'test_embed.csv'...")
+    test_df = pd.read_csv(ROOT / "experiments/test_embed.csv")
+    test_df["idx_in_original"] = np.arange(len(test_df))
+
+    test_dataset = EmbedDataset(df=test_df, transform=torch.nn.Identity(), cache=False)
+    test_dataloader = DataLoader(
+        test_dataset, batch_size=32, shuffle=False, num_workers=6
+    )
+    print(f"Test set loaded with {len(test_dataset)} samples.")
+
+    shifted_test_df = shift_generator.mammo_acq_prev_shift(test_df)
+    sampled_idx = shifted_test_df["idx_in_original"]
+    idx_array = sampled_idx.to_numpy()
+
     scenario, layers_to_visualise, feats_data = detect_scenario_and_process_embeddings(encoder_output, SPLIT)
 
     print(f"=== DETECTED SCENARIO: {scenario.upper()} ===")
@@ -221,12 +245,20 @@ if __name__ == "__main__":
     # Process each layer
     for layer in layers_to_visualise:
         print(f"\n--- Processing layer: {layer} ---")
+        # Full data set
         process_and_visualise_layer(
-            output_dir=OUTPUT_DIR,
             layer_name=layer,
             features=feats_data[layer], 
             labels=labels,
             scenario=scenario,
+        )
+        # Shifted subset
+        process_and_visualise_layer(
+            layer_name=layer,
+            features=feats_data[layer][idx_array], 
+            labels=labels[idx_array],
+            scenario=scenario, 
+            shifted=True
         )
 
     print(f"\n=== VISUALIZATION COMPLETE FOR SCENARIO: {scenario.upper()} ===\n")
