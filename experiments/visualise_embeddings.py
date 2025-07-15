@@ -42,6 +42,7 @@ def load_embeddings(file_path: Path):
     """
     try:
         with open(file_path, "rb") as f:
+            print(f"Type of file being loaded: {type(f)}")
             return pickle.load(f)
                
     except FileNotFoundError:
@@ -54,7 +55,10 @@ def load_embeddings(file_path: Path):
 # -----------------------------------
 # Detect scenario and get layers data
 # -----------------------------------
-def detect_scenario_and_process_embeddings(encoder_output: dict, split: str):
+def detect_scenario_and_process_embeddings(
+        encoder_output: dict, 
+        split: str
+        ) -> tuple[str, list[str], dict[str, torch.Tensor]]:
     """
     Identify the type of feature extraction scenario given an encoder output and return the relevant layers and features.
 
@@ -64,14 +68,14 @@ def detect_scenario_and_process_embeddings(encoder_output: dict, split: str):
         "all": Features from multiple layers are stored in "feats_by_layer".
 
     Args:
-        encoder_output (dict): Mapping of splits (e.g. "train", "test") to their data.
+        encoder_output (dict): Mapping of "train" and "test" splits to the corresponding embeddings.
         split (str): Which split to inspect.
 
     Returns:
         tuple:
             scenario_type (str): "final", "early", or "all"
-            layers_to_visualise (list of str): Names of layers available for visualisation.
-            feats_data (dict): Mapping from layer name to feature arrays.
+            layers_to_visualise (list[str]): Names of layers available for visualisation.
+            feats_data (dict[str, torch.Tensor]): Mapping from layer name to feature tensors.
 
     Raises:
         ValueError: If the split is missing or the structure is not recognised.
@@ -98,6 +102,8 @@ def detect_scenario_and_process_embeddings(encoder_output: dict, split: str):
         return "final", ["flattened"], {"flattened": split_data["feats"]}
     elif len(split_data.keys()) == 3 and 'y' in split_data and 'feats' in split_data and 'early_feats' in split_data:
         # "early" scenario
+        # Print types
+        print(f"split_data['early_feats'] type: {type(split_data['early_feats'])}")
         return "early", ["layer_1", "flattened"], {"layer_1": split_data["early_feats"], "flattened": split_data["feats"]}
     elif 'feats_by_layer' in split_data:
         # "all" scenario
@@ -115,19 +121,20 @@ def detect_scenario_and_process_embeddings(encoder_output: dict, split: str):
 def process_and_visualise_layer(
         layer_name: str, 
         features: torch.Tensor, 
-        labels: torch.Tensor, 
+        labels: list[torch.Tensor | np.ndarray], 
         scenario: str,
         shift: str="no_shift", 
         seed: int=42, 
         pca_components: int=2,
-        num_samples: int=1000):
+        num_samples: int=1000
+    ) -> None:
     """
     Processes data, reduces dimensionality, and visualises layer features.
 
     Args:
         layer_name: The name of the layer being processed.
         features: The feature embeddings for a given layer of the encoder.
-        labels: A list of labels for the data, including class labels, laterality, and view position.
+        labels: A list containing sets of labels for the data (e.g. class labels, laterality, manufacturer).
         scenario: A string identifier for the experimental scenario ("final", "early", "all").
         shifted: A string indicating the type of shift ("no_shift", "acq", "prev", or "acq_prev").
         seed: Random seed for reproducibility.
@@ -233,19 +240,29 @@ if __name__ == "__main__":
 
     # Simulate acquisition shift on the test data
     print(f"Simulating acquisition shift on test data...")
-    acq_shift_test_df = shift_generator.mammo_acq_prev_shift(test_df, target_manufacturer_distribution=[0.50, 0.00, 0.00, 0.20, 0.20, 0.10])
+    acq_shift_test_df = shift_generator.mammo_acq_prev_shift(
+        test_df, 
+        target_manufacturer_distribution=np.array([0.50, 0.00, 0.00, 0.20, 0.20, 0.10])
+    )
     acq_shift_sampled_idx = acq_shift_test_df["idx_in_original"]
     acq_shift_idx_array = acq_shift_sampled_idx.to_numpy()
 
     # Simulate prevalence shift on the test data
     print(f"Simulating prevalence shift on test data...")
-    prev_shift_test_df = shift_generator.mammo_acq_prev_shift(test_df, target_density_distribution=[0.15, 0.35, 0.35, 0.15])
+    prev_shift_test_df = shift_generator.mammo_acq_prev_shift(
+        test_df, 
+        target_density_distribution=np.array([0.15, 0.35, 0.35, 0.15])
+    )
     prev_shift_sampled_idx = prev_shift_test_df["idx_in_original"]
     prev_shift_idx_array = prev_shift_sampled_idx.to_numpy()
 
     # Simulate acquisition + prevalence shift on the test data
     print(f"Simulating acquisition + prevalence shift on test data...")
-    acq_prev_shift_test_df = shift_generator.mammo_acq_prev_shift(test_df, target_manufacturer_distribution=[0.50, 0.00, 0.00, 0.20, 0.20, 0.10], target_density_distribution=[0.15, 0.35, 0.35, 0.15])
+    acq_prev_shift_test_df = shift_generator.mammo_acq_prev_shift(
+        test_df,
+        target_manufacturer_distribution=np.array([0.50, 0.00, 0.00, 0.20, 0.20, 0.10]),
+        target_density_distribution=np.array([0.15, 0.35, 0.35, 0.15])
+    )
     acq_prev_shift_sampled_idx = acq_prev_shift_test_df["idx_in_original"]
     acq_prev_shift_idx_array = acq_prev_shift_sampled_idx.to_numpy()
 
