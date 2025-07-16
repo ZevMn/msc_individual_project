@@ -9,18 +9,18 @@ visual inspection of learned representations. The resulting plots are
 coloured by class, view position, laterality, and manufacturer model, and
 saved to a specified output directory.
 
-If one wants to run this script, ensure that an encoder (ENCODER_TO_EVALUATE) 
-and corresponding embeddings file (EMBEDDINGS_FILE_NAME) are correctly assigned 
-to the global variables at the beginning of the script. Adjust the output directory
-as needed.
+Before running, set the global variable "ENCODER_TO_EVALUATE" at the top of 
+the script to one of the supported options. The corresponding embeddings 
+file name ("EMBEDDINGS_FILE_NAME") will be assigned automatically.
 
-Before running, ensure the following global variables are set:
-    - ENCODER_TO_EVALUATE: the encoder identifier (e.g. "imagenet")
-    - EMBEDDINGS_FILE_NAME: corresponding pickled embeddings file name (e.g. "encoder_imagenet.pkl")
-    - FEAT_MODE: feature mode to use (e.g. "final", "early", "all")
+Global settings to configure:
+    - ENCODER_TO_EVALUATE: encoder identifier
+    - FEAT_MODE: feature mode to use
 
-NB: If you have previously generated an embeddings file with a feature mode different 
-    to that desired, you must delete the existing *.pkl file before running the script.
+NB:
+    If you have previously generated an embeddings file using a different 
+    feature mode, you must manually delete the existing *.pkl file before 
+    rerunning this script. Adjust the output directory as needed.
 
 Usage:
     python visualise_embeddings.py
@@ -47,10 +47,23 @@ import gc
 from experiments import shift_generator
 from experiments.inference_utils import get_or_save_outputs
 
-# Global variables
+# Supported encoders for the mammography dataset
+MAMMO_ENCODERS = {
+    "imagenet": "encoder_imagenet.pkl",
+    "simclr_imagenet": "encoder_simclr_imagenet.pkl",
+    "embed_mae": "encoder_embed_mae.pkl",
+    "random": "encoder_random.pkl",
+}
+
+# -------- Global settings --------
+# Choose from: "imagenet", "simclr_imagenet", "cxr_mae", "embed_mae", "imagenet_mae", "random"
 ENCODER_TO_EVALUATE = "imagenet"
-EMBEDDINGS_FILE_NAME = "encoder_imagenet.pkl"
-FEAT_MODE = "all"  # Options: "final", "early", "all"
+FEAT_MODE = "all" # Options: "final", "early", or "all"
+
+# Automatically set corresponding .pkl file name
+if ENCODER_TO_EVALUATE not in MAMMO_ENCODERS:
+    raise ValueError(f"Unknown encoder: {ENCODER_TO_EVALUATE}. Valid options: {list(MAMMO_ENCODERS.keys())}")
+EMBEDDINGS_FILE_NAME = MAMMO_ENCODERS[ENCODER_TO_EVALUATE]
 
 # Define paths
 ROOT = Path(__file__).resolve().parent.parent
@@ -58,10 +71,6 @@ ENCODER_PICKLE_PATH = ROOT / "experiments/outputs/Mammo/" / EMBEDDINGS_FILE_NAME
 OUTPUT_DIR = ROOT / "experiments/outputs/Mammo/Plots/"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)  # Ensure output directory exists
 
-"""
-NB: GenAI was used to generate the docstrings in this file, 
-but they have all been manually reviewed and edited.
-"""
 
 # ------------------------------------
 # Load embeddings with error handling
