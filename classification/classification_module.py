@@ -373,7 +373,7 @@ class ResNetBase(torch.nn.Module):
         x = self.net.relu(x)
         x = self.net.maxpool(x)
         if return_all_layers:
-            out["after_maxpool"] = x
+            out["after_maxpool"] = self.net.avgpool(x).flatten(1)
 
         x1 = self.net.layer1(x)
         if include_early_feats or return_all_layers:

@@ -1,6 +1,8 @@
 # NB: This file must be run from the root of the project
 
+import os
 import pickle
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,12 +13,21 @@ from sklearn.manifold import TSNE
 
 from pathlib import Path
 
+from torch.utils.data import DataLoader
 import torch
+from data_handling.mammo import EmbedDataset
+import gc
 
 from experiments import shift_generator
+from experiments.inference_utils import get_or_save_outputs
 
+# Variable
+ENCODER_TO_EVALUATE = "imagenet"
+EMBEDDINGS_FILE_NAME = "encoder_imagenet.pkl"
+
+# Define paths
 ROOT = Path(__file__).resolve().parent.parent
-ENCODER_PICKLE_PATH = ROOT / "experiments/outputs/Mammo/encoder_imagenet.pkl"
+ENCODER_PICKLE_PATH = ROOT / "experiments/outputs/Mammo/" / EMBEDDINGS_FILE_NAME
 OUTPUT_DIR = ROOT / "experiments/outputs/Mammo/Plots/"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)  # Ensure output directory exists
 
@@ -30,7 +41,7 @@ but they have all been manually reviewed and edited.
 # ------------------------------------
 def load_embeddings(file_path: Path):
     """
-    Load a pickled embeddings object.
+    Load a pickled embeddings file.
 
     Raises:
         FileNotFoundError
@@ -42,7 +53,6 @@ def load_embeddings(file_path: Path):
     """
     try:
         with open(file_path, "rb") as f:
-            print(f"Type of file being loaded: {type(f)}")
             return pickle.load(f)
                
     except FileNotFoundError:
@@ -84,10 +94,8 @@ def detect_scenario_and_process_embeddings(
         raise ValueError(f"Split '{split}' not found in encoder_output. Available splits: {list(encoder_output.keys())}")
     
     split_data = encoder_output[split]
-    # print("First few lines of split data for debugging:")
-    # for key, value in split_data.items():
-    #     print(f"  {key}: {value[:5]}")
 
+    # Check for errors:
     if len(split_data.keys()) == 0:
         # Missing data
         raise ValueError(f"No data found for split '{split}'. Available keys: {list(split_data.keys())}")
@@ -97,26 +105,23 @@ def detect_scenario_and_process_embeddings(
     elif 'y' not in split_data:
         # Missing labels
         raise ValueError(f"Labels are missing in split '{split}'. Available keys: {list(split_data.keys())}. Expected labels.")
+
+    # Parse data:
     elif len(split_data.keys()) == 2 and 'y' in split_data and 'feats' in split_data:
         # "final" scenario
         return "final", ["flattened"], {"flattened": split_data["feats"]}
     elif len(split_data.keys()) == 3 and 'y' in split_data and 'feats' in split_data and 'early_feats' in split_data:
         # "early" scenario
-        # Print types
-        print(f"split_data['early_feats'] type: {type(split_data['early_feats'])}")
         return "early", ["layer_1", "flattened"], {"layer_1": split_data["early_feats"], "flattened": split_data["feats"]}
-    elif 'feats_by_layer' in split_data:
-        # "all" scenario
-        all_layer_names = ["after_maxpool", "layer_1", "layer_2", "layer_3", "flattened"]
-        feats_by_layer = split_data['feats_by_layer']
-        layer_keys = list(feats_by_layer.keys())
-        if len([k for k in layer_keys if k in all_layer_names]) == len(all_layer_names):
-            return "all", layer_keys, feats_by_layer
+    else:
+        # Expect "all" scenario
+        all_layer_names = ["y", "after_maxpool", "layer_1", "layer_2", "layer_3", "flattened"]
+        if set(split_data.keys()) == set(all_layer_names):
+            feats_excluding_y = {k: v for k, v in split_data.items() if k != "y"}
+            return "all", feats_excluding_y.keys(), feats_excluding_y
         else:
             raise ValueError(f"Unexpected layer structure in split '{split}'. Found layers: {layer_keys}. Expected: {all_layer_names}.")
-    else:
-        raise ValueError(f"Unexpected data structure in split '{split}'. Available keys: {list(split_data.keys())}.")
-        
+
 
 def process_and_visualise_layer(
         layer_name: str, 
@@ -178,7 +183,7 @@ def process_and_visualise_layer(
     # Create plots
     sns.set_theme(style="white") # For cleaner appearance
 
-    fig, axes = plt.subplots(4, 2, figsize=(14, 18), constrained_layout=True)
+    fig, axes = plt.subplots(len(labels), 2, figsize=(14, 18), constrained_layout=True)
 
     alpha = 0.8
     style = 'o'
@@ -218,7 +223,7 @@ def process_and_visualise_layer(
         fig.suptitle(f"Scenario: {scenario.upper()} - {layer_name}", fontsize=16)
 
     # Save the figure
-    file_location = OUTPUT_DIR / f"{scenario}_{layer_name}_imagenet.png"
+    file_location = OUTPUT_DIR / f"{scenario}_{layer_name}_{ENCODER_TO_EVALUATE}.png"
     fig.savefig(file_location)
     plt.close(fig)
 
@@ -227,6 +232,8 @@ def process_and_visualise_layer(
 # Main execution
 # ------------------------------------
 if __name__ == "__main__":
+
+    ### 1. Process test and val feature data
 
     # Process the test data
     print(f"Loading test data from 'test_embed.csv'...")
@@ -237,6 +244,9 @@ if __name__ == "__main__":
     print(f"Loading validation data from 'val_embed.csv'...")
     val_df = pd.read_csv(ROOT / "experiments/val_embed.csv")
     val_df["idx_in_original"] = np.arange(len(val_df))
+
+
+    ### 2. Simulate different shifts on the test data
 
     # Simulate acquisition shift on the test data
     print(f"Simulating acquisition shift on test data...")
@@ -266,17 +276,49 @@ if __name__ == "__main__":
     acq_prev_shift_sampled_idx = acq_prev_shift_test_df["idx_in_original"]
     acq_prev_shift_idx_array = acq_prev_shift_sampled_idx.to_numpy()
 
-    # Load the encoder output
+
+    ### 3 If embeddings don't exist, generate them
+
+    if not os.path.exists(ENCODER_PICKLE_PATH):
+        # Prepare test and val datasets to be loaded into the encoder
+        val_dataset = EmbedDataset(df=val_df, transform=torch.nn.Identity(), cache=False)
+        val_dataloader = DataLoader(
+            val_dataset, batch_size=32, shuffle=False, num_workers=6
+        )
+        test_dataset = EmbedDataset(df=test_df, transform=torch.nn.Identity(), cache=False)
+        test_dataloader = DataLoader(
+            test_dataset, batch_size=32, shuffle=False, num_workers=6
+        )
+
+        # Generate the embeddings
+        print(f"Generating embeddings using '{ENCODER_TO_EVALUATE}' encoder...\n")
+        get_or_save_outputs(
+            model_to_evaluate=None,
+            encoder_to_evaluate=ENCODER_TO_EVALUATE,
+            val_loader=val_dataloader,
+            test_loader=test_dataloader,
+            dataset_name="Mammo",
+            feat_mode="all",  # options: "final", "early", "all"
+        )
+
+        # Cleanup
+        gc.collect()
+        torch.cuda.empty_cache()
+
+
+    ### 4. Load and process the test and val feature embeddings to be plotted
     print(f"Loading encoder output from {ENCODER_PICKLE_PATH}...")
     encoder_output = load_embeddings(ENCODER_PICKLE_PATH)
     scenario, layers_to_visualise, feats_data = detect_scenario_and_process_embeddings(encoder_output, "test")
     _, _, val_feats_data = detect_scenario_and_process_embeddings(encoder_output, "val")
 
 
-    print(f"=== DETECTED SCENARIO: {scenario.upper()} ===")
+    print(f"\n=== DETECTED SCENARIO: {scenario.upper()} ===")
     print(f"Available layers for visualisation: {layers_to_visualise}")
 
-    # Get labels for plots
+
+    ### 5. Extract category information to visualise
+
     val_classes = encoder_output["val"]["y"]
     test_classes = encoder_output["test"]["y"]
 
@@ -289,7 +331,9 @@ if __name__ == "__main__":
     test_model_array = test_df["ManufacturerModelName"].to_numpy()
     val_model_array = val_df["ManufacturerModelName"].to_numpy()
 
-    # Process each layer
+
+    ### 6. Generate the embedding plots for each layer of the encoder
+
     for layer in layers_to_visualise:
         print(f"\n--- Processing layer: {layer} ---")
         # Reference data ("val" dataset)

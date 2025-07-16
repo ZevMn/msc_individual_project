@@ -37,7 +37,7 @@ def get_or_save_outputs(
     val_loader, 
     test_loader, 
     dataset_name,
-    feat_mode: str = "all",  # options: "final", "early", "all"
+    feat_mode: str  # options: "final", "early", "all"
 ):
     """
     Inference loop. If already saved simply returns dictionary of outputs.
@@ -46,7 +46,8 @@ def get_or_save_outputs(
     encoder_id, model_id = get_ids_from_model_names(
         encoder_to_evaluate, model_to_evaluate
     )
-    outputs_dir = Path(f"outputs/{dataset_name}")
+    ROOT = Path(__file__).resolve().parent.parent
+    outputs_dir = ROOT / f"experiments/outputs/{dataset_name}"
     outputs_dir.mkdir(parents=True, exist_ok=True)
     model_filename = outputs_dir / f"model_{model_id}.pkl"
     print(encoder_id)
@@ -138,7 +139,7 @@ def get_or_save_outputs(
 
     if compute_task or compute_encoder:
         for name, loader in [("val", val_loader), ("test", test_loader)]:
-            print(f"Processing {name} set...")
+            print(f"\nProcessing {name} set...")
             y_list = []
             probas = []
             encoder_feats = []
@@ -197,9 +198,8 @@ def get_or_save_outputs(
                 }
 
                 if feat_mode == "all":
-                    for k in all_features:
-                        all_features[k] = torch.concatenate(all_features[k])
-                    encoder_output_entry["feats_by_layer"] = all_features
+                    for k in all_features.keys():
+                            encoder_output_entry[k] = torch.concatenate(all_features[k])
                 if feat_mode == "early" or feat_mode == "final":
                     encoder_output_entry["feats"] = torch.concatenate(encoder_feats)
                 if feat_mode == "early":
