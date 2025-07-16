@@ -47,11 +47,12 @@ import gc
 from experiments import shift_generator
 from experiments.inference_utils import get_or_save_outputs
 
+from shift_identification_detection.bbsd_tests import run_bbsd
+
 # Supported encoders for the mammography dataset
 MAMMO_ENCODERS = {
     "imagenet": "encoder_imagenet.pkl",
     "simclr_imagenet": "encoder_simclr_imagenet.pkl",
-    "embed_mae": "encoder_embed_mae.pkl",
     "random": "encoder_random.pkl",
 }
 
@@ -206,7 +207,6 @@ def process_and_visualise_layer(
         "manufacturer_model": labels[3],  # Manufacturer model names
     })
 
-
     # Add PCA components and t-SNE components to the DataFrame
     for i in range(pca_components):
         df[f"{layer_name} - PCA {i+1}"] = embeddings_pca[:,i]
@@ -262,6 +262,21 @@ def process_and_visualise_layer(
     file_location = OUTPUT_DIR / f"{scenario}_{layer_name}_{ENCODER_TO_EVALUATE}.png"
     fig.savefig(file_location)
     plt.close(fig)
+
+def calculate_bbsd(
+        source_distribution, # Val data. No shift. 
+        target_distribution, # Test data with simluated shift.
+        layer_name, # Of the encoder
+        shift # e.g. acq, prev, acq + prev
+    ) -> None:
+    """
+    DOCSTRING
+    """
+    if run_bbsd(source_distribution, target_distribution):
+        print(f"BBSD positive for {shift} shift and {layer_name}")
+    else:
+        print(f"BBSD negative for {shift} shift and {layer_name}")
+
 
 
 # ------------------------------------
@@ -343,6 +358,7 @@ if __name__ == "__main__":
 
 
     ### 4. Load and process the test and val feature embeddings to be plotted
+
     print(f"Loading encoder output from {ENCODER_PICKLE_PATH}...")
     encoder_output = load_embeddings(ENCODER_PICKLE_PATH)
     scenario, layers_to_visualise, feats_data = detect_scenario_and_process_embeddings(encoder_output, "test")
@@ -388,6 +404,12 @@ if __name__ == "__main__":
             scenario=scenario, 
             shift="acq"
         )
+        calculate_bbsd(
+            source_distribution=val_feats_data[layer], 
+            target_distribution=feats_data[layer][acq_shift_idx_array],
+            layer_name=layer,
+            shift="acq"
+        )
         # Prevalence shift
         process_and_visualise_layer(
             layer_name=layer,
@@ -396,12 +418,24 @@ if __name__ == "__main__":
             scenario=scenario, 
             shift="prev"
         )
+        calculate_bbsd(
+            source_distribution=val_feats_data[layer], 
+            target_distribution=feats_data[layer][prev_shift_idx_array],
+            layer_name=layer,
+            shift="prev"
+        )
         # Acquisition + Prevalence shift
         process_and_visualise_layer(
             layer_name=layer,
             features=feats_data[layer][acq_prev_shift_idx_array],
             labels=[test_classes[acq_prev_shift_idx_array], test_laterality_array[acq_prev_shift_idx_array], test_view_array[acq_prev_shift_idx_array], test_model_array[acq_prev_shift_idx_array]],
             scenario=scenario, 
+            shift="acq_prev"
+        )
+        calculate_bbsd(
+            source_distribution=val_feats_data[layer], 
+            target_distribution=feats_data[layer][acq_prev_shift_idx_array],
+            layer_name=layer,
             shift="acq_prev"
         )
 
