@@ -1,4 +1,27 @@
-# NB: This file must be run from the root of the project
+""" 
+experiments/visualise_embeddings.py
+
+This script generates visualisations of feature embeddings extracted from 
+various layers of a pre-trained encoder on mammography data.
+
+For each layer, PCA and t-SNE are used to reduce dimensionality, allowing
+visual inspection of learned representations. The resulting plots are
+coloured by class, view position, laterality, and manufacturer model, and
+saved to a specified output directory.
+
+If one wants to run this script, ensure that an encoder (ENCODER_TO_EVALUATE) 
+and corresponding embeddings file (EMBEDDINGS_FILE_NAME) are correctly assigned 
+to the global variables at the beginning of the script. Adjust the output directory
+as needed.
+
+Before running, ensure the following global variables are set:
+    - ENCODER_TO_EVALUATE: the encoder identifier (e.g. "imagenet")
+    - EMBEDDINGS_FILE_NAME: corresponding pickled embeddings file name (e.g. "encoder_imagenet.pkl")
+    - FEAT_MODE: feature mode to use (e.g. "final", "early", "all")
+
+Usage:
+    python visualise_embeddings.py
+""" 
 
 import os
 import pickle
@@ -21,9 +44,10 @@ import gc
 from experiments import shift_generator
 from experiments.inference_utils import get_or_save_outputs
 
-# Variable
+# Global variables
 ENCODER_TO_EVALUATE = "imagenet"
 EMBEDDINGS_FILE_NAME = "encoder_imagenet.pkl"
+FEAT_MODE = "all"  # Options: "final", "early", "all"
 
 # Define paths
 ROOT = Path(__file__).resolve().parent.parent
@@ -298,7 +322,7 @@ if __name__ == "__main__":
             val_loader=val_dataloader,
             test_loader=test_dataloader,
             dataset_name="Mammo",
-            feat_mode="all",  # options: "final", "early", "all"
+            feat_mode=FEAT_MODE
         )
 
         # Cleanup
