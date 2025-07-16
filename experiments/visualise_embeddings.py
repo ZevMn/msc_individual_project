@@ -264,14 +264,12 @@ def process_and_visualise_layer(
     plt.close(fig)
 
 def calculate_bbsd(
-        source_distribution, # Val data. No shift. 
-        target_distribution, # Test data with simluated shift.
-        layer_name, # Of the encoder
-        shift # e.g. acq, prev, acq + prev
+        source_distribution, # Val data
+        target_distribution, # Test data with simluated shift
+        layer_name, # Layer of the encoder
+        shift # E.g. acq, prev, acq + prev
     ) -> None:
-    """
-    DOCSTRING
-    """
+
     if run_bbsd(source_distribution, target_distribution):
         print(f"BBSD positive for {shift} shift and {layer_name}")
     else:
