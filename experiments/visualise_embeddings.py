@@ -118,9 +118,9 @@ def detect_scenario_and_process_embeddings(
         all_layer_names = ["y", "after_maxpool", "layer_1", "layer_2", "layer_3", "flattened"]
         if set(split_data.keys()) == set(all_layer_names):
             feats_excluding_y = {k: v for k, v in split_data.items() if k != "y"}
-            return "all", feats_excluding_y.keys(), feats_excluding_y
+            return "all", list(feats_excluding_y.keys()), feats_excluding_y
         else:
-            raise ValueError(f"Unexpected layer structure in split '{split}'. Found layers: {layer_keys}. Expected: {all_layer_names}.")
+            raise ValueError(f"Unexpected layer structure in split '{split}'. Found layers: {list(split_data.keys())}. Expected: {all_layer_names}.")
 
 
 def process_and_visualise_layer(
