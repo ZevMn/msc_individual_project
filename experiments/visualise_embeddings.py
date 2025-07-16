@@ -56,7 +56,7 @@ MAMMO_ENCODERS = {
 }
 
 # -------- Global settings --------
-# Choose from: "imagenet", "simclr_imagenet", "cxr_mae", "embed_mae", "imagenet_mae", "random"
+# Choose from: "imagenet", "simclr_imagenet", "embed_mae", "random"
 ENCODER_TO_EVALUATE = "imagenet"
 FEAT_MODE = "all" # Options: "final", "early", or "all"
 
