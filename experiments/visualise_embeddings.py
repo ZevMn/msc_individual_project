@@ -13,7 +13,7 @@ Before running, set the global variable "ENCODER_TO_EVALUATE" at the top of
 the script to one of the supported options. The corresponding embeddings 
 file name ("EMBEDDINGS_FILE_NAME") will be assigned automatically.
 
-Global settings to configure:
+Global settings to configure (also configurable via CLI arguments):
     - ENCODER_TO_EVALUATE: encoder identifier
     - FEAT_MODE: feature mode to use
 
@@ -27,7 +27,10 @@ Usage:
 """ 
 
 import os
+from pathlib import Path
 import pickle
+
+import argparse
 
 import pandas as pd
 import numpy as np
@@ -36,8 +39,6 @@ import seaborn as sns
 
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
-
-from pathlib import Path
 
 from torch.utils.data import DataLoader
 import torch
@@ -48,6 +49,8 @@ from experiments import shift_generator
 from experiments.inference_utils import get_or_save_outputs
 
 from shift_identification_detection.bbsd_tests import run_bbsd
+from shift_identification_detection.mmd_test import run_mmd_permutation_test
+
 
 # Supported encoders for the mammography dataset
 MAMMO_ENCODERS = {
@@ -61,14 +64,8 @@ MAMMO_ENCODERS = {
 ENCODER_TO_EVALUATE = "imagenet"
 FEAT_MODE = "all" # Options: "final", "early", or "all"
 
-# Automatically set corresponding .pkl file name
-if ENCODER_TO_EVALUATE not in MAMMO_ENCODERS:
-    raise ValueError(f"Unknown encoder: {ENCODER_TO_EVALUATE}. Valid options: {list(MAMMO_ENCODERS.keys())}")
-EMBEDDINGS_FILE_NAME = MAMMO_ENCODERS[ENCODER_TO_EVALUATE]
-
 # Define paths
 ROOT = Path(__file__).resolve().parent.parent
-ENCODER_PICKLE_PATH = ROOT / "experiments/outputs/Mammo/" / EMBEDDINGS_FILE_NAME
 OUTPUT_DIR = ROOT / "experiments/outputs/Mammo/Plots/"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)  # Ensure output directory exists
 
@@ -263,7 +260,7 @@ def process_and_visualise_layer(
     fig.savefig(file_location)
     plt.close(fig)
 
-def calculate_bbsd(
+def calculate_bbsd_and_mmd(
         source_distribution, # Val data
         target_distribution, # Test data with simluated shift
         layer_name, # Layer of the encoder
@@ -275,12 +272,32 @@ def calculate_bbsd(
     else:
         print(f"BBSD negative for {shift} shift and {layer_name}")
 
+    if run_mmd_permutation_test(source_distribution, target_distribution):
+        print(f"MMD positive for {shift} shift and {layer_name}\n")
+    else:
+        print(f"MMD negative for {shift} shift and {layer_name}\n")
 
 
 # ------------------------------------
 # Main execution
 # ------------------------------------
 if __name__ == "__main__":
+
+    # Option to set the arguments from the command line instead of as global variables
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--encoder_type", default=ENCODER_TO_EVALUATE)
+    parser.add_argument("--feat_mode", default=FEAT_MODE)
+    args = parser.parse_args()
+
+    ENCODER_TO_EVALUATE = args.encoder_type
+    FEAT_MODE = args.feat_mode
+
+    # Automatically set corresponding encoder file name and file path
+    if ENCODER_TO_EVALUATE not in MAMMO_ENCODERS:
+        raise ValueError(f"Unknown encoder: {ENCODER_TO_EVALUATE}. Valid options: {list(MAMMO_ENCODERS.keys())}")
+    EMBEDDINGS_FILE_NAME = MAMMO_ENCODERS[ENCODER_TO_EVALUATE]
+    ENCODER_PICKLE_PATH = ROOT / "experiments/outputs/Mammo/" / EMBEDDINGS_FILE_NAME
+
 
     ### 1. Process test and val feature data
 
@@ -402,7 +419,7 @@ if __name__ == "__main__":
             scenario=scenario, 
             shift="acq"
         )
-        calculate_bbsd(
+        calculate_bbsd_and_mmd(
             source_distribution=val_feats_data[layer], 
             target_distribution=feats_data[layer][acq_shift_idx_array],
             layer_name=layer,
@@ -416,7 +433,7 @@ if __name__ == "__main__":
             scenario=scenario, 
             shift="prev"
         )
-        calculate_bbsd(
+        calculate_bbsd_and_mmd(
             source_distribution=val_feats_data[layer], 
             target_distribution=feats_data[layer][prev_shift_idx_array],
             layer_name=layer,
@@ -430,7 +447,7 @@ if __name__ == "__main__":
             scenario=scenario, 
             shift="acq_prev"
         )
-        calculate_bbsd(
+        calculate_bbsd_and_mmd(
             source_distribution=val_feats_data[layer], 
             target_distribution=feats_data[layer][acq_prev_shift_idx_array],
             layer_name=layer,
