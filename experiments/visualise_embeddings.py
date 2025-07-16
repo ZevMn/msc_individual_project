@@ -19,6 +19,9 @@ Before running, ensure the following global variables are set:
     - EMBEDDINGS_FILE_NAME: corresponding pickled embeddings file name (e.g. "encoder_imagenet.pkl")
     - FEAT_MODE: feature mode to use (e.g. "final", "early", "all")
 
+NB: If you have previously generated an embeddings file with a feature mode different 
+    to that desired, you must delete the existing *.pkl file before running the script.
+
 Usage:
     python visualise_embeddings.py
 """ 
