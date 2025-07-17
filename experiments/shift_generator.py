@@ -349,9 +349,7 @@ def padchest_gender_prev_shift(
 
 def mammo_acq_prev_shift(
     test_df,
-    target_manufacturer_distribution=np.array(
-        [0.784, 0.005, 0.049, 0.042, 0.069, 0.049]
-    ),
+    target_manufacturer_distribution=np.array([0.784, 0.005, 0.049, 0.042, 0.069, 0.049]),
     target_density_distribution=np.array([0.073, 0.385, 0.472, 0.069]),
     target_dataset_size=None,
     random_state=None,

@@ -49,12 +49,60 @@ from shift_identification_detection.bbsd_tests import run_bbsd
 from shift_identification_detection.mmd_test import run_mmd_permutation_test
 
 
-# -------- Global settings --------
+# --------- Global settings ----------
 ENCODER_TO_EVALUATE = "imagenet" # Options: "imagenet", "simclr_imagenet", or "random"
 FEAT_MODE = "all" # Options: "final", "early", or "all"
 DATASET = "Mammo" # Options: "Mammo", "Retina", "RSNA", or "PadChest"
 
 ROOT = Path(__file__).resolve().parent.parent
+
+# ---------- Config maps -------------
+ENCODERS = {
+        "imagenet": "encoder_imagenet.pkl",
+        "simclr_imagenet": "encoder_simclr_imagenet.pkl",
+        "random": "encoder_random.pkl",
+}
+
+FEAT_MODES = ["final", "early", "all"]
+
+CSV_MAP = {
+    "Mammo": ("test_embed.csv", "val_embed.csv"),
+    "Retina": ("retina_test.csv", "retina_val.csv"),
+    "RSNA": ("test_rsna.csv", "val_rsna.csv"),
+    "PadChest": ("test_padchest.csv", "val_padchest.csv"),
+}
+
+COLUMN_MAP = {
+    "Mammo": dict(laterality="ImageLateralityFinal",
+                  view="ViewPosition",
+                  manufacturer="ManufacturerModelName"),
+    "Retina": dict(site="site"),
+    "RSNA": dict(age="Patient Age", 
+                 gender="Patient Gender", 
+                 view="View Position"),
+    "PadChest": dict(age="PatientAge", 
+                     view="Projection", 
+                     manufacturer="Manufacturer"),
+}
+
+PLOT_CONFIG = {
+    "Mammo": ["class", "laterality", "view", "manufacturer"],
+    "Retina": ["class", "site"],
+    "RSNA":  ["class", "gender", "view"],
+    "PadChest": ["class", "age", "view", "manufacturer"],
+}
+
+SHIFT_FUNCS = {
+    "Mammo": (shift_generator.mammo_acq_prev_shift),
+    "Retina": (shift_generator.retina_acq_prev_shift),
+    "RSNA": (shift_generator.rsna_gender_and_prev_shift, 
+             shift_generator.rsna_gender_shift,
+             shift_generator.rsna_subpopulation_shift,
+             shift_generator.rsna_prev_shift),
+    "PadChest": (shift_generator.sample_shift_padchest,
+                 shift_generator.padchest_gender_shift,
+                 shift_generator.padchest_gender_prev_shift)
+}
 
 
 # ------------------------------------
@@ -280,50 +328,30 @@ def calculate_bbsd_and_mmd(
 # ------------------------------------
 if __name__ == "__main__":
 
-    encoders = {
-        "imagenet": "encoder_imagenet.pkl",
-        "simclr_imagenet": "encoder_simclr_imagenet.pkl",
-        "random": "encoder_random.pkl",
-    }
-
-    csv_map = {
-        "Mammo": ("test_embed.csv", "val_embed.csv"),
-        "Retina": ("retina_test.csv", "retina_val.csv"),
-        "RSNA": ("test_rsna.csv", "val_rsna.csv"),
-        "PadChest": ("test_padchest.csv", "val_padchest.csv"),
-    }
-
-    ### 0. Configure and validate global settings
-
-    # Optional: Configure using CLI
+    # Optional: Configure global settings using CLI
     parser = argparse.ArgumentParser()
     parser.add_argument("--encoder_type", default=ENCODER_TO_EVALUATE,
-                        choices=list(encoders.keys()))
+                        choices=list(ENCODERS.keys()))
     parser.add_argument("--feat_mode", default=FEAT_MODE,
-                        choices=["final", "early", "all"])
+                        choices=FEAT_MODES)
     parser.add_argument("--dataset", default=DATASET,
-                        choices=list(csv_map.keys()))
+                        choices=list(CSV_MAP.keys()))
     args = parser.parse_args()
 
     ENCODER_TO_EVALUATE = args.encoder_type
     FEAT_MODE = args.feat_mode
     DATASET= args.dataset
-    
-    try:
-        EMBEDDINGS_FILE_NAME = encoders[ENCODER_TO_EVALUATE]
-    except KeyError:
-        raise ValueError(f"Unknown encoder: {ENCODER_TO_EVALUATE}. Valid options: {list(encoders.keys())}")
-    
+
+    embeddings_file_name = ENCODERS[ENCODER_TO_EVALUATE]
+    test_csv, val_csv = CSV_MAP[DATASET]
+    shift_functions = SHIFT_FUNCS[DATASET]
+    columns = COLUMN_MAP[DATASET]
+   
     # File paths
-    ENCODER_PICKLE_PATH = ROOT / "experiments"/ "outputs"/ DATASET / EMBEDDINGS_FILE_NAME
+    ENCODER_PICKLE_PATH = ROOT / "experiments" / "outputs"/ DATASET / embeddings_file_name
     OUTPUT_DIR = ROOT / "experiments"/ "outputs" / DATASET / "Plots/"
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)  # Ensure output directory exists
 
-    try:
-        test_csv, val_csv = csv_map[DATASET]
-    except KeyError:
-        raise ValueError(f"Unrecognised dataset: {DATASET}. Available options are: {list(csv_map.keys())}")
-    
 
     ### 1. Process test and val feature data
 
