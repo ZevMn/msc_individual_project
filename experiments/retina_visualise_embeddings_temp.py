@@ -1,5 +1,5 @@
 """ 
-experiments/visualise_embeddings.py
+experiments/retina_visualise_embeddings_temp.py
 
 This script generates visualisations of feature embeddings extracted from 
 various layers of a pre-trained encoder on mammography data.
@@ -20,7 +20,7 @@ NB:
     rerunning this script. Adjust the output directory as needed.
 
 Usage:
-    python visualise_embeddings.py
+    python retina_visualise_embeddings_temp.py
 """ 
 
 import os
@@ -49,12 +49,22 @@ from shift_identification_detection.bbsd_tests import run_bbsd
 from shift_identification_detection.mmd_test import run_mmd_permutation_test
 
 
+# Supported encoders for the mammography dataset
+ENCODERS = {
+    "imagenet": "encoder_imagenet.pkl",
+    "simclr_imagenet": "encoder_simclr_imagenet.pkl",
+    "random": "encoder_random.pkl",
+}
+
 # -------- Global settings --------
 ENCODER_TO_EVALUATE = "imagenet" # Options: "imagenet", "simclr_imagenet", or "random"
 FEAT_MODE = "all" # Options: "final", "early", or "all"
-DATASET = "Mammo" # Options: "Mammo", "Retina", "RSNA", or "PadChest"
+DATASET = "Retina" # Options: "Mammo", "Retina", "RSNA", or "PadChest"
 
+# Define paths
 ROOT = Path(__file__).resolve().parent.parent
+OUTPUT_DIR = ROOT / "experiments" / "outputs" / DATASET / "Plots/"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)  # Ensure output directory exists
 
 
 # ------------------------------------
@@ -143,9 +153,7 @@ def detect_scenario_and_process_embeddings(
         else:
             raise ValueError(f"Unexpected layer structure in split '{split}'. Found layers: {list(split_data.keys())}. Expected: {all_layer_names}.")
 
-# -----------------------------------
-# PCA and t-SNE analysis and plots
-# -----------------------------------
+
 def process_and_visualise_layer(
         layer_name: str, 
         features: torch.Tensor, 
@@ -169,26 +177,22 @@ def process_and_visualise_layer(
         pca_components: The number of principal components to reduce to.
         num_samples: The number of points to include in the final plot.
     """
-    scenario_label = f"{scenario}_{shift}"
+    scenario += f"_{shift}"
 
-    if features.is_cuda: # Safety check (that features is not on GPU)
-        features = features.cpu()
     embeddings = features.numpy() # Convert PyTorch tensor to numpy array for processing
-    print(f"[{layer_name}] Original shape: {embeddings.shape}") # Should be 2D
 
+    print(f"[{layer_name}] Original shape: {embeddings.shape}") # Should be 2D
+      
     # PCA reduction
-    pca = PCA(n_components=0.95, whiten=False, random_state=seed) # PCA embedding that preserves 95% of the variance of the input data
+    pca = PCA(n_components=0.95, whiten=False) # PCA embedding that preserves 95% of the variance of the input data
     embeddings_pca = pca.fit_transform(embeddings)
     print(f"[{layer_name}] PCA shape: {embeddings_pca.shape}")
     print(f"[{layer_name}] PCA explained variance ratio: {pca.explained_variance_ratio_[:2]}")
 
     # Use the t-SNE algorithm on PCA-reduced features to obtain a 2D embedding for input data
-    embeddings_tsne = TSNE(n_components=2, 
-                           init='random',
-                           learning_rate='auto',
-                           random_state=seed).fit_transform(embeddings_pca)
+    embeddings_tsne = TSNE(n_components=2, init='random', learning_rate='auto', random_state=seed).fit_transform(embeddings_pca)
     print(f"[{layer_name}] t-SNE shape: {embeddings_tsne.shape}")
-    
+
     # Create a pandas DataFrame to process data
     df = pd.DataFrame({
         "class": labels[0],  # Class labels
@@ -247,16 +251,13 @@ def process_and_visualise_layer(
         sns.move_legend(ax_tsne, loc="upper left", bbox_to_anchor=(1, 1))
         ax_tsne.set_title(f"t-SNE coloured by {label_type}")
 
-        fig.suptitle(f"{DATASET} | Scenario: {scenario_label.upper()} - {layer_name}", fontsize=16)
+        fig.suptitle(f"{DATASET} | Scenario: {scenario.upper()} - {layer_name}", fontsize=16)
 
     # Save the figure
-    file_location = OUTPUT_DIR / f"{scenario_label}_{layer_name}_{ENCODER_TO_EVALUATE}.png"
+    file_location = OUTPUT_DIR / f"{scenario}_{layer_name}_{ENCODER_TO_EVALUATE}.png"
     fig.savefig(file_location)
     plt.close(fig)
 
-# -----------------------------------
-# BBSD and MMD analysis wrapper
-# -----------------------------------
 def calculate_bbsd_and_mmd(
         source_distribution, # Val data
         target_distribution, # Test data with simluated shift
@@ -280,65 +281,53 @@ def calculate_bbsd_and_mmd(
 # ------------------------------------
 if __name__ == "__main__":
 
-    encoders = {
-        "imagenet": "encoder_imagenet.pkl",
-        "simclr_imagenet": "encoder_simclr_imagenet.pkl",
-        "random": "encoder_random.pkl",
-    }
-
-    csv_map = {
-        "Mammo": ("test_embed.csv", "val_embed.csv"),
-        "Retina": ("retina_test.csv", "retina_val.csv"),
-        "RSNA": ("test_rsna.csv", "val_rsna.csv"),
-        "PadChest": ("test_padchest.csv", "val_padchest.csv"),
-    }
-
-    ### 0. Configure and validate global settings
-
-    # Optional: Configure using CLI
+    # Optional: Set the arguments from the command line instead of as global variables
     parser = argparse.ArgumentParser()
-    parser.add_argument("--encoder_type", default=ENCODER_TO_EVALUATE,
-                        choices=list(encoders.keys()))
-    parser.add_argument("--feat_mode", default=FEAT_MODE,
-                        choices=["final", "early", "all"])
-    parser.add_argument("--dataset", default=DATASET,
-                        choices=list(csv_map.keys()))
+    parser.add_argument("--encoder_type", default=ENCODER_TO_EVALUATE)
+    parser.add_argument("--feat_mode", default=FEAT_MODE)
+    parser.add_argument("--dataset", default=DATASET)
     args = parser.parse_args()
 
     ENCODER_TO_EVALUATE = args.encoder_type
     FEAT_MODE = args.feat_mode
     DATASET= args.dataset
-    
-    try:
-        EMBEDDINGS_FILE_NAME = encoders[ENCODER_TO_EVALUATE]
-    except KeyError:
-        raise ValueError(f"Unknown encoder: {ENCODER_TO_EVALUATE}. Valid options: {list(encoders.keys())}")
-    
-    # File paths
-    ENCODER_PICKLE_PATH = ROOT / "experiments"/ "outputs"/ DATASET / EMBEDDINGS_FILE_NAME
-    OUTPUT_DIR = ROOT / "experiments"/ "outputs" / DATASET / "Plots/"
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)  # Ensure output directory exists
 
-    try:
-        test_csv, val_csv = csv_map[DATASET]
-    except KeyError:
-        raise ValueError(f"Unrecognised dataset: {DATASET}. Available options are: {list(csv_map.keys())}")
-    
+
+    if DATASET == "Mammo":
+        test_csv = "test_embed.csv"
+        val_csv = "val_embed.csv"
+    elif DATASET == "Retina":
+        test_csv = "retina_test.csv"
+        val_csv = "retina_val.csv"
+    elif DATASET == "RNSA":
+        test_csv = "test_rsna.csv"
+        val_csv = "val_rnsa.csv"
+    else: # DATASET == "PadChest"
+        test_csv = "test_padchest.csv"
+        val_csv = "val_padchest.csv"
+
+
+    # Automatically set corresponding encoder file name and file path
+    if ENCODER_TO_EVALUATE not in ENCODERS:
+        raise ValueError(f"Unknown encoder: {ENCODER_TO_EVALUATE}. Valid options: {list(ENCODERS.keys())}")
+    EMBEDDINGS_FILE_NAME = ENCODERS[ENCODER_TO_EVALUATE]
+    ENCODER_PICKLE_PATH = ROOT / "experiments"/ "outputs"/ DATASET / EMBEDDINGS_FILE_NAME
+
 
     ### 1. Process test and val feature data
 
     # Process the test data
     print(f"Loading test data from '{test_csv}'...")
-    test_df = pd.read_csv(ROOT / "experiments" / test_csv)
+    test_df = pd.read_csv(ROOT / f"experiments/{test_csv}")
     test_df["idx_in_original"] = np.arange(len(test_df))
 
-    # Process the validation dat
+    # Process the validation data
     print(f"Loading validation data from '{val_csv}'...")
-    val_df = pd.read_csv(ROOT / "experiments" / val_csv)
+    val_df = pd.read_csv(ROOT / f"experiments/{val_csv}")
     val_df["idx_in_original"] = np.arange(len(val_df))
 
 
-    ### 2. Simulate different covariate shifts on the test data
+    ### 2. Simulate different shifts on the test data
 
     # Simulate acquisition shift on the test data
     print(f"Simulating acquisition shift on test data...")
