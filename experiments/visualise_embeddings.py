@@ -30,6 +30,8 @@ Usage:
         --dataset Mammo
 """
 
+from embeddings.config import Config
+
 import random
 
 import os
@@ -299,9 +301,8 @@ def process_and_visualise_layer(
         layer_name: str, 
         features: torch.Tensor, 
         labels: Sequence[torch.Tensor | np.ndarray], 
-        scenario: str,
         shift: str="no_shift", 
-        seed: int=42, 
+        seed: int=Config.SEED, 
         pca_components: int=2,
         num_samples: int=1000
     ) -> None:
@@ -334,7 +335,7 @@ def process_and_visualise_layer(
 
     # PCA reduction
     #pca = PCA(n_components=0.95, whiten=False, random_state=seed) # PCA embedding that preserves 95% of the variance of the input data
-    pca = PCA(n_components=pca_components, whiten=False, random_state=seed)
+    pca = PCA(n_components=pca_components, whiten=False, random_state=Config.SEED)
     embeddings_pca = pca.fit_transform(embeddings)
     print(f"[{layer_name}] PCA shape: {embeddings_pca.shape}")
     print(f"[{layer_name}] PCA explained variance ratio: {pca.explained_variance_ratio_[:2]}")
@@ -343,7 +344,7 @@ def process_and_visualise_layer(
     embeddings_tsne = TSNE(n_components=2, 
                            init='random',
                            learning_rate='auto',
-                           random_state=seed).fit_transform(embeddings_pca)
+                           random_state=Config.SEED).fit_transform(embeddings_pca)
     print(f"[{layer_name}] t-SNE shape: {embeddings_tsne.shape}")
     
     # Create a pandas DataFrame to process data
@@ -362,12 +363,7 @@ def process_and_visualise_layer(
     # Create plots
     sns.set_theme(style="white") # For cleaner appearance
 
-    fig, axes = plt.subplots(len(feature_attributes), 2, figsize=(14, 18), constrained_layout=True)
-
-    alpha = 0.8
-    style = 'o'
-    markersize = 40
-    color_palette = 'tab10'
+    fig, axes = plt.subplots(len(feature_attributes), 2, figsize=Config.FIGURE_SIZE, constrained_layout=True)
 
     for i, label_type in enumerate(feature_attributes):
 
@@ -377,10 +373,10 @@ def process_and_visualise_layer(
             x=f"{layer_name} - PCA 1", 
             y=f"{layer_name} - PCA 2", 
             hue=label_type, 
-            alpha=alpha, 
-            marker=style, 
-            s=markersize, 
-            palette=color_palette, 
+            alpha=Config.ALPHA, 
+            marker=Config.STYLE, 
+            s=Config.MARKER_SIZE, 
+            palette=Config.COLOR_PALETTE, 
             ax=axes[i, 0])
         ax_pca.set_title(f"PCA coloured by {label_type}")
 
@@ -390,10 +386,10 @@ def process_and_visualise_layer(
             x=f"{layer_name} - t-SNE 1", 
             y=f"{layer_name} - t-SNE 2", 
             hue=label_type, 
-            alpha=alpha, 
-            marker=style, 
-            s=markersize, 
-            palette=color_palette, 
+            alpha=Config.ALPHA, 
+            marker=Config.STYLE, 
+            s=Config.MARKER_SIZE, 
+            palette=Config.COLOR_PALETTE, 
             ax=axes[i, 1])
         ax_tsne.set_title(f"t-SNE coloured by {label_type}")
 
@@ -432,7 +428,7 @@ def calculate_bbsd_and_mmd(
 # Main execution
 # ------------------------------------
 if __name__ == "__main__":
-    set_seeds(42)
+    set_seeds(Config.SEED)
 
     # Optional: Configure global settings using CLI
     parser = argparse.ArgumentParser()
@@ -480,8 +476,8 @@ if __name__ == "__main__":
         get_or_save_outputs(
             model_to_evaluate=None,
             encoder_to_evaluate=ENCODER_TO_EVALUATE,
-            val_loader=DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=6),
-            test_loader=DataLoader(test_dataset, batch_size=32, shuffle=False, num_workers=6),
+            val_loader=DataLoader(val_dataset, batch_size=Config.BATCH_SIZE, shuffle=False, num_workers=Config.NUM_WORKERS),
+            test_loader=DataLoader(test_dataset, batch_size=Config.BATCH_SIZE, shuffle=False, num_workers=Config.NUM_WORKERS),
             dataset_name=DATASET,
             feat_mode=FEAT_MODE
         )
@@ -535,7 +531,6 @@ if __name__ == "__main__":
             layer_name=layer,
             features=val_feats_data[layer], 
             labels=layer_labels_val,
-            scenario=scenario,
             shift="no_shift"
         )
 
@@ -547,7 +542,6 @@ if __name__ == "__main__":
                 layer_name=layer,
                 features=feats_data[layer][idx_array],
                 labels=shifted_labels,
-                scenario=scenario,
                 shift=shift_name
             )
             calculate_bbsd_and_mmd(

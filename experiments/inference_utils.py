@@ -142,9 +142,7 @@ def get_or_save_outputs(
             print(f"\nProcessing {name} set...")
             y_list = []
             probas = []
-            encoder_feats = []
-            encoder_early_feats = []
-            all_features = defaultdict(list)
+            embeddings_lists = defaultdict(list)
 
             with torch.no_grad():
                 for batch in tqdm(loader):
@@ -161,29 +159,27 @@ def get_or_save_outputs(
                         # with RGB images (e.g. SimCLR ImageNet):
                         if encoder.input_channels == 3 and x.shape[1] == 1:
                             x = torch.repeat_interleave(x, 3, 1)
-                        try:
-                            if feat_mode == "all":
-                                all_layer_feats = encoder.get_features(x, return_all_layers=True)
-                                for layer_name, feat_tensor in all_layer_feats.items():
-                                    all_features[layer_name].append(feat_tensor.detach().cpu())
-                            elif feat_mode == "early":
-                                early_feat, final_feat = encoder.get_features(x, include_early_feats=True)
-                                encoder_early_feats.append(early_feat.detach().cpu())
-                                encoder_feats.append(final_feat.detach().cpu())
-                            else:  # "final"
-                                final_feat = encoder.get_features(x)
-                                encoder_feats.append(final_feat.detach().cpu())
 
+                        try:
+                            # Extract embeddings
+                            embeddings = encoder.get_features(
+                                x,
+                                include_early_feats = (feat_mode == "early"),
+                                return_all_layers  = (feat_mode == "all")
+                            )
                         except TypeError as e:
                             print(f"[Warning] Encoder get_features() failed: {e}")
-                            final_feat = encoder.get_features(x)
-                            encoder_feats.append(final_feat.detach().cpu())
+                            embeddings = {"final_layer": encoder(x)} # Regular forward pass
+
+                        for k, v in embeddings.items():
+                            embeddings_lists[k].append(v.detach().cpu())
+
 
             # Concatenate and build the output entry for current dataset
-            y_final = torch.concatenate(y_list)
+            y_final = torch.cat(y_list, dim=0)
 
             if compute_task:
-                probas_final = torch.softmax(torch.concatenate(probas), 1)
+                probas_final = torch.softmax(torch.cat(probas, dim=0), 1)
                 task_output.update(
                     {
                         name: {
@@ -193,25 +189,14 @@ def get_or_save_outputs(
                     }
                 )
             if compute_encoder:
-                encoder_output_entry = {
-                    "y": y_final
-                }
+                encoder_output_entry = {"y": y_final}
 
-                if feat_mode == "all":
-                    for k in all_features.keys():
-                            encoder_output_entry[k] = torch.concatenate(all_features[k])
-                if feat_mode == "early" or feat_mode == "final":
-                    encoder_output_entry["feats"] = torch.concatenate(encoder_feats)
-                if feat_mode == "early":
-                    encoder_output_entry["early_feats"] = torch.concatenate(encoder_early_feats)
+                for k, vlist in embeddings_lists.items():
+                    encoder_output_entry[k] = torch.cat(vlist, dim=0)
 
                 encoder_output[name] = encoder_output_entry
 
                 # Memory Cleanup
-                del y_list, probas, encoder_feats, encoder_early_feats
-                for k in list(all_features.keys()):
-                    del all_features[k]
-                del all_features
                 gc.collect()
                 torch.cuda.empty_cache()
 

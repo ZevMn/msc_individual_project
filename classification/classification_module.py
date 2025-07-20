@@ -364,7 +364,7 @@ class ResNetBase(torch.nn.Module):
             x: torch.Tensor, 
             include_early_feats: bool=False, 
             return_all_layers: bool=False
-            ) -> torch.Tensor | tuple | dict:
+            ) -> dict[str, torch.Tensor]:
 
         out={}
 
@@ -387,14 +387,9 @@ class ResNetBase(torch.nn.Module):
 
         x4 = self.net.layer4(x3)
         x_out = self.net.avgpool(x4).flatten(1)  # 512
-        out["flattened"] = normalize(x_out, dim=1) if self.normalise_features else x_out
+        out["final_layer"] = normalize(x_out, dim=1) if self.normalise_features else x_out
 
-        if return_all_layers:
-            return out
-        elif include_early_feats:
-            return out["layer_1"], out["flattened"]
-        else:
-            return out["flattened"]
+        return out
 
 
     def classify_features(self, x: torch.Tensor) -> torch.Tensor:
