@@ -32,7 +32,6 @@ Usage:
 
 import argparse
 import gc
-import os
 from pathlib import Path
 
 import numpy as np
@@ -69,8 +68,9 @@ def extract_plot_labels(
         dataset: str
     ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
     """
-    Create dictionaries mapping each label category to the corresponding NumPy array 
-    of labels extracted from the val and test datasets for plotting.
+    Build two ordered dicts mapping each label category to the corresponding NumPy array 
+    of labels extracted from the val and test datasets for plotting. The order follows 
+    Config.DATASET_CONFIG[dataset]["plot_columns"].
 
     Args:
         val_df (pd.DataFrame): Dataframe for the "val" dataset.
@@ -88,23 +88,26 @@ def extract_plot_labels(
                                                     of labels extracted from the "test" dataset.
     """
 
-    # Add class labels
-    val_plot_labels = {"class": class_labels[0]}
-    test_plot_labels = {"class": class_labels[1]}
+    val_plot_labels = {}
+    test_plot_labels = {}
 
-    # Add the other desired labels
-    column_map = Config.DATASET_CONFIG[dataset]["column_map"]
-    for label_name, col in column_map.items():
-        if col not in val_df.columns or col not in test_df.columns:
-            raise KeyError(f"Column '{col}' not found in one of the input DataFrames.")
-        
-        val_plot_labels[label_name] = val_df[col].to_numpy()
-        test_plot_labels[label_name] = test_df[col].to_numpy()
-
-    # Ensure the ordering of the labels matches expected order for plotting
     ordered_columns = Config.DATASET_CONFIG[dataset]["plot_columns"]
-    val_plot_labels = {k: val_plot_labels[k] for k in ordered_columns}
-    test_plot_labels = {k: test_plot_labels[k] for k in ordered_columns}
+    column_map = Config.DATASET_CONFIG[dataset]["column_map"]
+
+    for label in ordered_columns:
+        if label == "class":
+            # Class labels come from the encoder output, not the csv
+            val_plot_labels["class"] = class_labels[0]
+            test_plot_labels["class"] = class_labels[1]
+            continue
+
+        col_name = column_map[label]
+
+        if col_name not in val_df.columns or col_name not in test_df.columns:
+            raise KeyError(f"Column '{col_name}' not found in the supplied DataFrames.")
+        
+        val_plot_labels[label] = val_df[col_name].to_numpy()
+        test_plot_labels[label] = test_df[col_name].to_numpy()
 
     return val_plot_labels, test_plot_labels
 
@@ -224,6 +227,7 @@ if __name__ == "__main__":
     OUTPUT_DIR = ROOT / "experiments"/ "outputs" / DATASET / "Plots" / f"{ENCODER_TO_EVALUATE}/"
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)  # Ensure output directory exists
 
+    print(f"\n=== SCENARIO: {DATASET.upper()} | {ENCODER_TO_EVALUATE.upper()} | {FEAT_MODE.upper()} ===")
 
     ### 1. Process test and val CSVs
 
@@ -241,7 +245,7 @@ if __name__ == "__main__":
 
     ### 2. If feature embeddings don't already exist then generate them
 
-    if not os.path.exists(ENCODER_PICKLE_PATH):
+    if not Path.exists(ENCODER_PICKLE_PATH):
 
         val_preprocessed, test_preprocessed = preprocess_data(DATASET, val_df, test_df)
 
@@ -267,6 +271,7 @@ if __name__ == "__main__":
     encoder_output = load_embeddings(ENCODER_PICKLE_PATH)
 
     layers, val_embeddings, test_embeddings = validate_and_process_embeddings(encoder_output)
+    print(f"Available layers for visualisation: {layers}")
 
     class_labels = (
         encoder_output["val"]["y"].cpu().numpy(),
@@ -274,8 +279,6 @@ if __name__ == "__main__":
     )
     val_plot_labels, test_plot_labels = extract_plot_labels(val_df, test_df, class_labels, DATASET)
 
-    print(f"\n=== SCENARIO: {DATASET.upper()} | {ENCODER_TO_EVALUATE.upper()} | {FEAT_MODE.upper()} ===")
-    print(f"Available layers for visualisation: {layers}")
 
     ### 4. Generate covariate-shifted test subsets and store their original indices
     shift_to_indices_dict = {}
@@ -324,10 +327,10 @@ if __name__ == "__main__":
                 shift=shift_name
             )
 
-        aggregate_and_plot_shifted_features(
-            reference_features=val_embeddings_by_layer[layer],
-            shift_to_indices_dict=shift_to_indices_dict,
-        )
+        # aggregate_and_plot_shifted_features(
+        #     reference_features=val_embeddings_by_layer[layer],
+        #     shift_to_indices_dict=shift_to_indices_dict,
+        # )
 
-
-    print(f"\n=== VISUALIZATION COMPLETE FOR SCENARIO: {scenario.upper()} ===\n")
+    print(f"\n=== VISUALIZATION COMPLETE FOR SCENARIO: ===")
+    print(f"{DATASET.upper()} | {ENCODER_TO_EVALUATE.upper()} | {FEAT_MODE.upper()}\n")
