@@ -76,31 +76,39 @@ ENCODERS = {
 
 FEAT_MODES = ["final", "early", "all"]
 
-CSV_MAP = {
-    "Mammo": ("test_embed.csv", "val_embed.csv"),
-    "Retina": ("retina_test.csv", "retina_val.csv"),
-    "RSNA": ("test_rsna.csv", "val_rsna.csv"),
-    "PadChest": ("test_padchest.csv", "val_padchest.csv"),
-}
-
-COLUMN_MAP = {
-    "Mammo": dict(laterality="ImageLateralityFinal",
-                  view="ViewPosition",
-                  manufacturer="ManufacturerModelName"),
-    "Retina": dict(site="site"),
-    "RSNA": dict(age="Patient Age", 
-                 gender="Patient Gender", 
-                 view="View Position"),
-    "PadChest": dict(age="PatientAge", 
-                     view="Projection", 
-                     manufacturer="Manufacturer"),
-}
-
-PLOT_CONFIG = {
-    "Mammo": ["class", "laterality", "view", "manufacturer"],
-    "Retina": ["class", "site"],
-    "RSNA":  ["class", "gender", "view"],
-    "PadChest": ["class", "age", "view", "manufacturer"],
+DATASET_CONFIG = {
+    "Mammo": {
+        "csv_files": ("test_embed.csv", "val_embed.csv"),
+        "column_map": {
+            "laterality": "ImageLateralityFinal",
+            "view": "ViewPosition",
+            "manufacturer": "ManufacturerModelName"
+        },
+        "plot_columns": ["class", "laterality", "view", "manufacturer"]
+    },
+    "Retina": {
+        "csv_files": ("retina_test.csv", "retina_val.csv"),
+        "column_map": {"site": "site"},
+        "plot_columns": ["class", "site"]
+    },
+    "RSNA": {
+        "csv_files": ("test_rsna.csv", "val_rsna.csv"),
+        "column_map": {
+            "age": "Patient Age",
+            "gender": "Patient Gender",
+            "view": "View Position"
+        },
+        "plot_columns": ["class", "gender", "view"]
+    },
+    "PadChest": {
+        "csv_files": ("test_padchest.csv", "val_padchest.csv"),
+        "column_map": {
+            "age": "PatientAge",
+            "view": "Projection",
+            "manufacturer": "Manufacturer"
+        },
+        "plot_columns": ["class", "age", "view", "manufacturer"]
+    }
 }
 
 SHIFT_REGISTRY: dict[str, dict[str, Callable]] = {
@@ -123,7 +131,6 @@ SHIFT_REGISTRY: dict[str, dict[str, Callable]] = {
                         target_prevalence = 0.5),
     },
     "RSNA": {
-        ##################### CHECK THAT THESE VALUES ARE SENSIBLE #####################
         "gender_prev": partial(shift_generator.rsna_gender_and_prev_shift,
                                target_female_proportion=0.40,
                                target_prevalence=0.25),
@@ -135,7 +142,6 @@ SHIFT_REGISTRY: dict[str, dict[str, Callable]] = {
                           target_abnormal_neg=0.70),
     },
     "PadChest": {
-        ##################### CHECK THAT THESE VALUES ARE SENSIBLE #####################
         "gender_prev": partial(shift_generator.padchest_gender_prev_shift,
                                target_disease=0.04,
                                target_female_proportion=0.50),
@@ -341,7 +347,7 @@ def process_and_visualise_layer(
     print(f"[{layer_name}] t-SNE shape: {embeddings_tsne.shape}")
     
     # Create a pandas DataFrame to process data
-    feature_attributes = PLOT_CONFIG[DATASET]
+    feature_attributes = DATASET_CONFIG[DATASET]["plot_columns"]
     df = pd.DataFrame({label: np_array for label, np_array in zip(feature_attributes, labels)})
 
     # Add PCA components and t-SNE components to the DataFrame
@@ -435,7 +441,7 @@ if __name__ == "__main__":
     parser.add_argument("--feat_mode", default=FEAT_MODE,
                         choices=FEAT_MODES)
     parser.add_argument("--dataset", default=DATASET,
-                        choices=list(CSV_MAP.keys()))
+                        choices=list(DATASET_CONFIG.keys()))
     args = parser.parse_args()
 
     ENCODER_TO_EVALUATE = args.encoder_type
@@ -450,7 +456,7 @@ if __name__ == "__main__":
 
     ### 1. Process test and val CSVs
 
-    test_csv, val_csv = CSV_MAP[DATASET]
+    test_csv, val_csv = DATASET_CONFIG[DATASET]["csv_files"]
 
     # Process the test data
     print(f"Loading test data from '{test_csv}'...")
@@ -497,7 +503,7 @@ if __name__ == "__main__":
     print(f"Available layers for visualisation: {layers_to_visualise}")
 
 
-    columns = COLUMN_MAP[DATASET]
+    columns = DATASET_CONFIG[DATASET]["column_map"]
     test_plot_labels = build_plot_labels_df(test_df, columns)
     val_plot_labels = build_plot_labels_df(val_df, columns)
 
@@ -514,8 +520,8 @@ if __name__ == "__main__":
         shift_to_indices_dict[shift_name] = shifted_test_df["idx_in_original"].to_numpy()
 
     # Re‑orders the labels to match those expected when plotting
-    layer_labels_val = [val_plot_labels[k]  for k in PLOT_CONFIG[DATASET]]
-    layer_labels_test = [test_plot_labels[k] for k in PLOT_CONFIG[DATASET]]
+    layer_labels_val = [val_plot_labels[k]  for k in DATASET_CONFIG[DATASET]["plot_columns"]]
+    layer_labels_test = [test_plot_labels[k] for k in DATASET_CONFIG[DATASET]["plot_columns"]]
 
 
     ### 5. Generate the embedding plots for each layer of the encoder
