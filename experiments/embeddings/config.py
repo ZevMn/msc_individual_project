@@ -9,16 +9,14 @@ as config maps for the encoders and datasets.
 Also contains a helper function to set all seeds so that RNG is 
 deterministic and reproducable for all experiments.
 """
+
+import random
+
 from typing import Callable
 from functools import partial
 
 import numpy as np
-
 import torch
-
-import random
-
-import os
 
 from experiments import shift_generator
 
@@ -32,7 +30,6 @@ class Config:
     ALPHA = 0.8
     MARKER_SIZE = 40
     COLOR_PALETTE = 'tab10'
-    MARKER = 'o'
     FIGURE_SIZE = (14, 18)
 
     # ---------- Config maps -------------
@@ -156,4 +153,3 @@ class Config:
         np.random.seed(seed)
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
-        os.environ["PYTHONHASHSEED"] = str(seed)

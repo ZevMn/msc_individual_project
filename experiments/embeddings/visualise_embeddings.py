@@ -4,19 +4,17 @@ experiments/embeddings/visualise_embeddings.py
 
 from pathlib import Path
 
-from config import Config
-
-import torch
-import numpy as np
-import pandas as pd
-
 import matplotlib.pyplot as plt
 import seaborn as sns
+
+import numpy as np
+import pandas as pd
+import torch
 
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
-from typing import Sequence
+from config import Config
 
 def calculate_PCA_and_tSNE(
         embeddings: torch.Tensor,
@@ -109,7 +107,7 @@ def process_and_visualise_layer(
             y=f"{layer_name} - PCA 2", 
             hue=column, 
             alpha=Config.ALPHA, 
-            marker=Config.MARKER, 
+            marker="o", 
             s=Config.MARKER_SIZE, 
             palette=Config.COLOR_PALETTE, 
             ax=axes[i, 0])
@@ -122,7 +120,7 @@ def process_and_visualise_layer(
             y=f"{layer_name} - t-SNE 2", 
             hue=column, 
             alpha=Config.ALPHA, 
-            marker=Config.MARKER, 
+            marker="o", 
             s=Config.MARKER_SIZE, 
             palette=Config.COLOR_PALETTE, 
             ax=axes[i, 1])
