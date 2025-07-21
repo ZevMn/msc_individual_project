@@ -11,6 +11,7 @@ deterministic and reproducable for all experiments.
 """
 
 import random
+from pathlib import Path
 
 from typing import Callable
 from functools import partial
@@ -18,9 +19,11 @@ from functools import partial
 import numpy as np
 import torch
 
+from dataclasses import dataclass
+
 from experiments import shift_generator
 
-@dataclass(frozen=True)
+@dataclass(frozen=True) # To guarrantee immutability
 class PlotConfig:    
     ALPHA = 0.8
     MARKER_SIZE = 40
@@ -28,8 +31,9 @@ class PlotConfig:
     FIGURE_SIZE = (14, 18)
     PCA_COMPONENTS = 2
 
-@dataclass(frozen=True)
+@dataclass(frozen=True) # To guarrantee immutability
 class Config:
+    ROOT = Path(__file__).resolve().parent.parent.parent
     SEED = 42
     BATCH_SIZE = 32
     NUM_WORKERS = 6

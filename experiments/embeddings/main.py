@@ -31,12 +31,9 @@ Usage:
 """
 
 import argparse
-from pathlib import Path
 
 from config import Config
 from driver import run_experiment
-
-ROOT = Path(__file__).resolve().parent.parent.parent
 
 # --------- Defaults ----------
 ENCODER_TO_EVALUATE = "imagenet" # Options: "imagenet", "simclr_imagenet", or "random"

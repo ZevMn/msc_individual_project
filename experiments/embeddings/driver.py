@@ -24,14 +24,6 @@ from embeddings_io import load_embeddings
 
 from visualise_embeddings import process_and_visualise_layer, aggregate_features_and_plot_shift_comparison
 
-
-ROOT = Path(__file__).resolve().parent.parent.parent
-
-# --------- Defaults ----------
-ENCODER_TO_EVALUATE = "imagenet" # Options: "imagenet", "simclr_imagenet", or "random"
-FEAT_MODE = "all" # Options: "final", "early", or "all"
-DATASET = "Mammo" # Options: "Mammo", "Retina", "RSNA", or "PadChest"
-
 # -------------------------------------------------------------
 # Generate dicts of {label names: feature labels to be plotted}
 # -------------------------------------------------------------
@@ -188,8 +180,8 @@ def run_experiment(
     Config.set_seeds(Config.SEED)
 
     # File paths
-    encoder_pickle_path = ROOT / "experiments" / "outputs"/ dataset / Config.ENCODERS[encoder_to_evaluate]
-    output_dir = ROOT / "experiments"/ "outputs" / dataset / "Plots" / f"{encoder_to_evaluate}/"
+    encoder_pickle_path = Config.ROOT / "experiments" / "outputs"/ dataset / Config.ENCODERS[encoder_to_evaluate]
+    output_dir = Config.ROOT / "experiments"/ "outputs" / dataset / "Plots" / f"{encoder_to_evaluate}/"
 
     print(f"\n=== {dataset.upper()} | {encoder_to_evaluate.upper()} | {feat_mode.upper()} ===")
 
@@ -199,8 +191,8 @@ def run_experiment(
 
     # Process the test and validation csv data
     print(f"Loading val data from '{val_csv}' and test data from '{test_csv}'...")
-    val_df = pd.read_csv(ROOT / "experiments" / val_csv)
-    test_df = pd.read_csv(ROOT / "experiments" / test_csv)
+    val_df = pd.read_csv(Config.ROOT / "experiments" / val_csv)
+    test_df = pd.read_csv(Config.ROOT / "experiments" / test_csv)
 
     # Create index column to track features
     val_df["idx_in_original"] = np.arange(len(val_df))

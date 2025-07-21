@@ -3,6 +3,7 @@ experiments/embeddings/visualise_embeddings.py
 """
 
 from pathlib import Path
+from typing import Tuple
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -20,28 +21,30 @@ def calculate_PCA_and_tSNE(
         embeddings: torch.Tensor,
         seed: int=Config.SEED, 
         pca_components: int=PlotConfig.PCA_COMPONENTS,
-    ):
+    ) -> Tuple[np.ndarray, np.ndarray]:
 
     if embeddings.is_cuda: # Ensure embeddings on CPU (and not GPU)
         embeddings = embeddings.cpu()
 
     # Convert PyTorch tensor to np.ndarray for processing
-    embeddings = embeddings.numpy()
+    embeddings_np = embeddings.numpy()
 
-    if embeddings.ndim != 2:
-        raise ValueError(f"Expected 2D embeddings, got shape {embeddings.shape}")
+    if embeddings_np.ndim != 2:
+        raise ValueError(f"Expected 2D embeddings, got shape {embeddings_np.shape}")
 
     # PCA reduction
     pca = PCA(n_components=pca_components, whiten=False, random_state=seed)
-    embeddings_pca = pca.fit_transform(embeddings)
+    embeddings_pca = pca.fit_transform(embeddings_np)
     print(f"PCA shape: {embeddings_pca.shape}")
     print(f"PCA explained variance ratio: {pca.explained_variance_ratio_[:2]}")
 
     # Use the t-SNE algorithm on PCA-reduced features to obtain a 2D embedding for input data
-    embeddings_tsne = TSNE(n_components=pca_components, 
-                           init='random',
-                           learning_rate='auto',
-                           random_state=seed).fit_transform(embeddings_pca)
+    embeddings_tsne = TSNE(
+        n_components=pca_components, 
+        init='random',
+        learning_rate='auto',
+        random_state=seed
+    ).fit_transform(embeddings_pca)
     print(f"t-SNE shape: {embeddings_tsne.shape}")
 
     return embeddings_pca, embeddings_tsne
@@ -166,7 +169,7 @@ def aggregate_features_and_plot_shift_comparison(
 
     sns.set_theme(style="white", font_scale=1.2)
     plt.rcParams.update({'font.family': 'serif'})
-    
+
     fig, axes = plt.subplots(len(layers), 2, figsize=PlotConfig.FIGURE_SIZE, constrained_layout=True)
 
     for i, layer in enumerate(layers):
