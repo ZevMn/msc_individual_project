@@ -14,12 +14,12 @@ import torch
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
-from config import Config
+from config import PlotConfig, Config
 
 def calculate_PCA_and_tSNE(
         embeddings: torch.Tensor,
         seed: int=Config.SEED, 
-        pca_components: int=Config.PCA_COMPONENTS,
+        pca_components: int=PlotConfig.PCA_COMPONENTS,
     ):
 
     if embeddings.is_cuda: # Ensure embeddings on CPU (and not GPU)
@@ -41,7 +41,7 @@ def calculate_PCA_and_tSNE(
     embeddings_tsne = TSNE(n_components=pca_components, 
                            init='random',
                            learning_rate='auto',
-                           random_state=Config.SEED).fit_transform(embeddings_pca)
+                           random_state=seed).fit_transform(embeddings_pca)
     print(f"t-SNE shape: {embeddings_tsne.shape}")
 
     return embeddings_pca, embeddings_tsne
@@ -60,7 +60,7 @@ def process_and_visualise_layer(
         labels: dict[str, np.ndarray], 
         shift: str="no_shift",
         seed: int=Config.SEED,
-        pca_components: int=Config.PCA_COMPONENTS,
+        pca_components: int=PlotConfig.PCA_COMPONENTS,
         num_samples: int=1000
     ) -> None:
     """
@@ -97,7 +97,7 @@ def process_and_visualise_layer(
     # Create plots
     sns.set_theme(style="white")
 
-    fig, axes = plt.subplots(len(columns), 2, figsize=Config.FIGURE_SIZE, constrained_layout=True)
+    fig, axes = plt.subplots(len(columns), 2, figsize=PlotConfig.FIGURE_SIZE, constrained_layout=True)
 
     for i, column in enumerate(columns):
         # PCA plot (left column)
@@ -106,10 +106,10 @@ def process_and_visualise_layer(
             x=f"{layer_name} - PCA 1", 
             y=f"{layer_name} - PCA 2", 
             hue=column, 
-            alpha=Config.ALPHA, 
+            alpha=PlotConfig.ALPHA, 
             marker="o", 
-            s=Config.MARKER_SIZE, 
-            palette=Config.COLOR_PALETTE, 
+            s=PlotConfig.MARKER_SIZE, 
+            palette=PlotConfig.COLOR_PALETTE, 
             ax=axes[i, 0])
         ax_pca.set_title(f"PCA coloured by {column}")
 
@@ -119,10 +119,10 @@ def process_and_visualise_layer(
             x=f"{layer_name} - t-SNE 1", 
             y=f"{layer_name} - t-SNE 2", 
             hue=column, 
-            alpha=Config.ALPHA, 
+            alpha=PlotConfig.ALPHA, 
             marker="o", 
-            s=Config.MARKER_SIZE, 
-            palette=Config.COLOR_PALETTE, 
+            s=PlotConfig.MARKER_SIZE, 
+            palette=PlotConfig.COLOR_PALETTE, 
             ax=axes[i, 1])
         ax_tsne.set_title(f"t-SNE coloured by {column}")
 
@@ -136,6 +136,7 @@ def process_and_visualise_layer(
     file_location = output_dir / f"{shift}_{layer_name}_{encoder_to_evaluate}.png"
     fig.savefig(file_location)
     plt.close(fig)
+    print(f"[Saved] {file_location}")
 
 
 def aggregate_features_and_plot_shift_comparison(
@@ -163,7 +164,7 @@ def aggregate_features_and_plot_shift_comparison(
     """
 
     sns.set_theme(style="white")
-    fig, axes = plt.subplots(len(layers), 2, figsize=Config.FIGURE_SIZE, constrained_layout=True)
+    fig, axes = plt.subplots(len(layers), 2, figsize=PlotConfig.FIGURE_SIZE, constrained_layout=True)
 
     for i, layer in enumerate(layers):
 
@@ -196,9 +197,9 @@ def aggregate_features_and_plot_shift_comparison(
             y="PCA 2", 
             hue="Shift", 
             style="Shift", 
-            alpha=Config.ALPHA, 
-            s=Config.MARKER_SIZE, 
-            palette=Config.COLOR_PALETTE, 
+            alpha=PlotConfig.ALPHA, 
+            s=PlotConfig.MARKER_SIZE, 
+            palette=PlotConfig.COLOR_PALETTE, 
             ax=axes[i, 0])
         ax_pca.set_title(f"PCA Shift Comparison for {layer}")
 
@@ -208,9 +209,9 @@ def aggregate_features_and_plot_shift_comparison(
             x="t-SNE 1", 
             y="t-SNE 2", 
             hue="Shift", 
-            alpha=Config.ALPHA, 
-            s=Config.MARKER_SIZE, 
-            palette=Config.COLOR_PALETTE, 
+            alpha=PlotConfig.ALPHA, 
+            s=PlotConfig.MARKER_SIZE, 
+            palette=PlotConfig.COLOR_PALETTE, 
             ax=axes[i, 1])
         ax_tsne.set_title(f"t-SNE Shift Comparison for {layer}")
 
@@ -224,3 +225,4 @@ def aggregate_features_and_plot_shift_comparison(
     file_location = output_dir / f"{dataset}_{encoder_to_evaluate}_shift_comparison.png"
     fig.savefig(file_location)
     plt.close(fig)
+    print(f"[Saved] {file_location}")

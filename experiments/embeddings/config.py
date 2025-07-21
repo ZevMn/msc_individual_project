@@ -20,17 +20,17 @@ import torch
 
 from experiments import shift_generator
 
-class Config:
-    SEED = 42
-    PCA_COMPONENTS = 2
-    BATCH_SIZE = 32
-    NUM_WORKERS = 6
-    
-    # Plot styling
+class PlotConfig:    
     ALPHA = 0.8
     MARKER_SIZE = 40
     COLOR_PALETTE = 'tab10'
     FIGURE_SIZE = (14, 18)
+    PCA_COMPONENTS = 2
+
+class Config:
+    SEED = 42
+    BATCH_SIZE = 32
+    NUM_WORKERS = 6
 
     # ---------- Config maps -------------
     FEAT_MODES: list[str] = ["final", "early", "all"]

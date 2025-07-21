@@ -44,6 +44,10 @@ from experiments.inference_utils import get_or_save_outputs
 from shift_identification_detection.bbsd_tests import run_bbsd
 from shift_identification_detection.mmd_test import run_mmd_permutation_test
 
+from data_handling.mammo import EmbedDataset
+from data_handling.retina import RetinaDataset
+from data_handling.xray import RNSAPneumoniaDetectionDataset, PadChestDataset
+
 from config import Config
 
 from embeddings_io import load_embeddings
@@ -117,13 +121,15 @@ def extract_plot_labels(
 # -----------------------------------------
 def preprocess_data(dataset, val_df, test_df):
         if dataset == "Mammo":
-            from data_handling.mammo import EmbedDataset as DS
+            DS = EmbedDataset
         elif dataset == "Retina":
-            from data_handling.retina import RetinaDataset as DS
+            DS = RetinaDataset
         elif dataset == "RSNA":
-            from data_handling.xray import RNSAPneumoniaDetectionDataset as DS
-        else: # dataset == "PadChest"
-            from data_handling.xray import PadChestDataset as DS
+            DS = RNSAPneumoniaDetectionDataset
+        elif dataset == "PadChest":
+            DS = PadChestDataset
+        else:
+            raise ValueError(f"Dataset not recognised. Expected: {Config.DATASET_CONFIG.keys()}")
         
         return DS(df=val_df, transform=torch.nn.Identity(), cache=False), DS(df=test_df, transform=torch.nn.Identity(), cache=False)
 
