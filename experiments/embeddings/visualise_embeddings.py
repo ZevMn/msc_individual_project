@@ -19,23 +19,32 @@ from sklearn.manifold import TSNE
 from typing import Sequence
 
 def calculate_PCA_and_tSNE(
-        embeddings: np.ndarray,
+        embeddings: torch.Tensor,
         seed: int=Config.SEED, 
-        pca_components: int=2,
+        pca_components: int=Config.PCA_COMPONENTS,
     ):
+
+    if embeddings.is_cuda: # Ensure embeddings on CPU (and not GPU)
+        embeddings = embeddings.cpu()
+
+    # Convert PyTorch tensor to np.ndarray for processing
+    embeddings = embeddings.numpy()
+
+    if embeddings.ndim != 2:
+        raise ValueError(f"Expected 2D embeddings, got shape {embeddings.shape}")
 
     # PCA reduction
     pca = PCA(n_components=pca_components, whiten=False, random_state=seed)
     embeddings_pca = pca.fit_transform(embeddings)
-    print(f"[{layer_name}] PCA shape: {embeddings_pca.shape}")
-    print(f"[{layer_name}] PCA explained variance ratio: {pca.explained_variance_ratio_[:2]}")
+    print(f"PCA shape: {embeddings_pca.shape}")
+    print(f"PCA explained variance ratio: {pca.explained_variance_ratio_[:2]}")
 
     # Use the t-SNE algorithm on PCA-reduced features to obtain a 2D embedding for input data
     embeddings_tsne = TSNE(n_components=pca_components, 
                            init='random',
                            learning_rate='auto',
                            random_state=Config.SEED).fit_transform(embeddings_pca)
-    print(f"[{layer_name}] t-SNE shape: {embeddings_tsne.shape}")
+    print(f"t-SNE shape: {embeddings_tsne.shape}")
 
     return embeddings_pca, embeddings_tsne
      
@@ -49,44 +58,34 @@ def process_and_visualise_layer(
         encoder_to_evaluate: str,
         dataset: str,
         layer_name: str, 
-        features: torch.Tensor, 
+        layer_embeddings: torch.Tensor, 
         labels: dict[str, np.ndarray], 
         shift: str="no_shift",
         seed: int=Config.SEED,
+        pca_components: int=Config.PCA_COMPONENTS,
         num_samples: int=1000
     ) -> None:
     """
     Processes data, reduces dimensionality, and visualises layer features.
 
     Args:
-        layer_name: The name of the layer being processed.
-        features: The feature embeddings for a given layer of the encoder.
+        output_dir: Path to the directory where the plots will be saved.
+        encoder_to_evaluate: Encoder used to generate features.
+        dataset: Dataset name.
+        layer_name: The layer of the encoder being processed.
+        layer_embeddings: The feature embeddings for a given layer of the encoder.
         labels: A list containing sets of labels for the data (e.g. class labels, laterality, manufacturer).
-        scenario: A string identifier for the experimental scenario ("final", "early", "all").
-        shifted: A string indicating the type of shift ("no_shift", "acq", "prev", or "acq_prev").
+        shift: A string indicating the type of shift (e.g. "no_shift", "acq", "prev", "acq_prev").
         seed: Random seed for reproducibility.
         pca_components: The number of principal components to reduce to.
         num_samples: The number of points to include in the final plot.
     """
 
-    if features.is_cuda: # Safety check (that features is not on GPU)
-        features = features.cpu()
-    embeddings = features.numpy() # Convert PyTorch tensor to numpy array for processing
-    print(f"[{layer_name}] Original shape: {embeddings.shape}") # Should be 2D
+    embeddings_pca, embeddings_tsne = calculate_PCA_and_tSNE(layer_embeddings)
 
-    # # Early subsampling
-    # rng = np.random.default_rng(seed)
-    # sample_idx = rng.choice(len(embeddings),
-    #                         size=min(num_samples, len(embeddings)),
-    #                         replace=False)
-    # embeddings = embeddings[sample_idx]
-    # labels = [lbl[sample_idx] for lbl in labels]
-    
     # Create a pandas DataFrame to process data
-    feature_attributes = Config.DATASET_CONFIG[dataset]["plot_columns"]
-    df = pd.DataFrame({label: np_array for label, np_array in zip(feature_attributes, labels)})
-
-    embeddings_pca, embeddings_tsne = calculate_PCA_and_tSNE(embeddings)
+    columns = Config.DATASET_CONFIG[dataset]["plot_columns"]
+    df = pd.DataFrame({col: labels[col] for col in columns})
 
     # Add PCA components and t-SNE components to the DataFrame
     for i in range(pca_components):
@@ -98,40 +97,39 @@ def process_and_visualise_layer(
     sample = df.sample(n=min(num_samples, len(df)), random_state=seed)
 
     # Create plots
-    sns.set_theme(style="white") # For cleaner appearance
+    sns.set_theme(style="white")
 
-    fig, axes = plt.subplots(len(feature_attributes), 2, figsize=Config.FIGURE_SIZE, constrained_layout=True)
+    fig, axes = plt.subplots(len(columns), 2, figsize=Config.FIGURE_SIZE, constrained_layout=True)
 
-    for i, label_type in enumerate(feature_attributes):
-
+    for i, column in enumerate(columns):
         # PCA plot (left column)
         ax_pca = sns.scatterplot(
             data=sample, 
             x=f"{layer_name} - PCA 1", 
             y=f"{layer_name} - PCA 2", 
-            hue=label_type, 
+            hue=column, 
             alpha=Config.ALPHA, 
             marker=Config.MARKER, 
             s=Config.MARKER_SIZE, 
             palette=Config.COLOR_PALETTE, 
             ax=axes[i, 0])
-        ax_pca.set_title(f"PCA coloured by {label_type}")
+        ax_pca.set_title(f"PCA coloured by {column}")
 
         # t-SNE plot
         ax_tsne = sns.scatterplot(
             data=sample, 
             x=f"{layer_name} - t-SNE 1", 
             y=f"{layer_name} - t-SNE 2", 
-            hue=label_type, 
+            hue=column, 
             alpha=Config.ALPHA, 
             marker=Config.MARKER, 
             s=Config.MARKER_SIZE, 
             palette=Config.COLOR_PALETTE, 
             ax=axes[i, 1])
-        ax_tsne.set_title(f"t-SNE coloured by {label_type}")
+        ax_tsne.set_title(f"t-SNE coloured by {column}")
 
     for ax in axes.ravel():
-            sns.move_legend(ax, loc="upper left", bbox_to_anchor=(1,1))
+        sns.move_legend(ax, loc="upper left", bbox_to_anchor=(1,1))
 
     fig.suptitle(f"{dataset} | Scenario: {shift} - {layer_name}", fontsize=16)
 
@@ -141,13 +139,13 @@ def process_and_visualise_layer(
     plt.close(fig)
 
 
-def aggregate_and_plot_shifted_features(
+def aggregate_features_and_plot_shift_comparison(
     output_dir: Path,  
     encoder_to_evaluate: str, 
     dataset: str,
     layers: list[str],
-    reference_features: dict[str, torch.Tensor],
-    test_features: dict[str, torch.Tensor], 
+    val_embeddings: dict[str, torch.Tensor],
+    test_embeddings: dict[str, torch.Tensor], 
     shift_to_indices_dict: dict[str, np.ndarray],
 ) -> None:
     """
@@ -160,55 +158,69 @@ def aggregate_and_plot_shifted_features(
         encoder_to_evaluate: Encoder used to generate features.
         dataset: Dataset name.
         layers: The layers of the encoder that embeddings have been extracted from.
-        reference_features: Feature embeddings from the val dataset.
-        reference_features: Feature embeddings from the test dataset.
-        shifted_features_dict: A mapping of shift name to indices of covariate-shifted test subsets.
+        val_embeddings: Mapping of layer names to feature embeddings from the val dataset.
+        test_embeddings: Mapping of layer names to feature embeddings from the test dataset.
+        shift_to_indices_dict: A mapping of shift name to indices of covariate-shifted test subsets.
     """
-    # Concatenate the reference features and shifted features so that they share a PCA space
-    all_features = [reference_features]  # Start with reference
-    shifts = ["no_shift"]  # Reference shift name
-    for shift_name, shifted_features in shifted_features_dict.items():
-        all_features.append(shifted_features)
-        all_labels.append(shifted_labels_dict[shift_name])
-        shifts.append(shift_name)
 
-    # Convert features to numpy for PCA/t-SNE processing
-    all_features = np.concatenate([features.numpy() for features in all_features], axis=0)
-    all_labels = np.concatenate(all_labels, axis=0)
-
-    # PCA reduction
-    pca = PCA(n_components=2, whiten=False, random_state=Config.SEED)
-    all_features_pca = pca.fit_transform(all_features)
-
-    # t-SNE dimensionality reduction
-    tsne = TSNE(n_components=2, init='random', learning_rate='auto', random_state=Config.SEED)
-    all_features_tsne = tsne.fit_transform(all_features_pca)
-
-    # Create DataFrame for easy plotting
-    df = pd.DataFrame({
-        'PCA 1': all_features_pca[:, 0],
-        'PCA 2': all_features_pca[:, 1],
-        't-SNE 1': all_features_tsne[:, 0],
-        't-SNE 2': all_features_tsne[:, 1],
-        'Shift': np.array(shifts * [len(features) for features in all_features]).flatten(),
-        'Labels': all_labels
-    })
-
-    # Create PCA and t-SNE plots
     sns.set_theme(style="white")
-    fig, axes = plt.subplots(1, 2, figsize=Config.FIGURE_SIZE, constrained_layout=True)
+    fig, axes = plt.subplots(len(layers), 2, figsize=Config.FIGURE_SIZE, constrained_layout=True)
 
-    # PCA plot
-    sns.scatterplot(data=df, x='PCA 1', y='PCA 2', hue='Shift', style='Shift', markers={'no_shift': 'o', 'acq': 'X', 'prev': 's'}, palette='tab10', ax=axes[0], alpha=0.8, s=Config.MARKER_SIZE)
-    axes[0].set_title(f"PCA - {layer_name} ({dataset})")
-    axes[0].legend(title="Shift", bbox_to_anchor=(1.05, 1), loc='upper left')
+    for i, layer in enumerate(layers):
 
-    # t-SNE plot
-    sns.scatterplot(data=df, x='t-SNE 1', y='t-SNE 2', hue='Shift', style='Shift', markers={'no_shift': 'o', 'acq': 'X', 'prev': 's'}, palette='tab10', ax=axes[1], alpha=0.8, s=Config.MARKER_SIZE)
-    axes[1].set_title(f"t-SNE - {layer_name} ({dataset})")
-    axes[1].legend(title="Shift", bbox_to_anchor=(1.05, 1), loc='upper left')
+        # Concatenate the reference features and shifted features so that they share a PCA space
+        cat_embeddings = [val_embeddings[layer]]
+        shift_labels = ["no_shift"] * len(val_embeddings[layer])
+
+        for shift_name, idx_array in shift_to_indices_dict.items():
+            shift_embeddings = test_embeddings[layer][idx_array]
+            cat_embeddings.append(shift_embeddings)
+            shift_labels.extend([shift_name] * len(shift_embeddings))
+
+        cat_embeddings = torch.cat(cat_embeddings)
+
+        # PCA and t-SNE
+        embeddings_pca, embeddings_tsne = calculate_PCA_and_tSNE(cat_embeddings)
+
+        df = pd.DataFrame({
+            "PCA 1": embeddings_pca[:,0],
+            "PCA 2": embeddings_pca[:,1],
+            "t-SNE 1": embeddings_tsne[:,0],
+            "t-SNE 2": embeddings_tsne[:,1],
+            "Shift": shift_labels,
+        })
+
+        # PCA plot (left column)
+        ax_pca = sns.scatterplot(
+            data=df, 
+            x="PCA 1", 
+            y="PCA 2", 
+            hue="Shift", 
+            style="Shift", 
+            alpha=Config.ALPHA, 
+            s=Config.MARKER_SIZE, 
+            palette=Config.COLOR_PALETTE, 
+            ax=axes[i, 0])
+        ax_pca.set_title(f"PCA Shift Comparison for {layer}")
+
+        # t-SNE plot (right column)
+        ax_tsne = sns.scatterplot(
+            data=df, 
+            x="t-SNE 1", 
+            y="t-SNE 2", 
+            hue="Shift", 
+            alpha=Config.ALPHA, 
+            s=Config.MARKER_SIZE, 
+            palette=Config.COLOR_PALETTE, 
+            ax=axes[i, 1])
+        ax_tsne.set_title(f"t-SNE Shift Comparison for {layer}")
+
+    for ax in axes.ravel():
+        sns.move_legend(ax, loc="upper left", bbox_to_anchor=(1,1))
+
+    fig.suptitle(f"{dataset} | Shift Comparisons for all layers of {encoder_to_evaluate} encoder using PCA and t-SNE analysis", fontsize=16)
 
     # Save the figure
-    file_location = output_dir / f"shift_comparison_{layer_name}_{encoder_to_evaluate}.png"
+    file_location = output_dir / f"{dataset}_{encoder_to_evaluate}_shift_comparison.png"
     fig.savefig(file_location)
     plt.close(fig)

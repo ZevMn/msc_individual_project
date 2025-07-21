@@ -48,15 +48,15 @@ from config import Config
 
 from embeddings_io import load_embeddings
 
-from visualise_embeddings import process_and_visualise_layer, aggregate_and_plot_shifted_features
+from visualise_embeddings import process_and_visualise_layer, aggregate_features_and_plot_shift_comparison
 
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
 # --------- Defaults ----------
-ENCODER_TO_EVALUATE = "simclr_imagenet" # Options: "imagenet", "simclr_imagenet", or "random"
+ENCODER_TO_EVALUATE = "imagenet" # Options: "imagenet", "simclr_imagenet", or "random"
 FEAT_MODE = "all" # Options: "final", "early", or "all"
-DATASET = "PadChest" # Options: "Mammo", "Retina", "RSNA", or "PadChest"    
+DATASET = "Mammo" # Options: "Mammo", "Retina", "RSNA", or "PadChest"
 
 # -------------------------------------------------------------
 # Generate dicts of {label names: feature labels to be plotted}
@@ -302,7 +302,7 @@ if __name__ == "__main__":
             encoder_to_evaluate=ENCODER_TO_EVALUATE,
             dataset=DATASET,
             layer_name=layer,
-            features=val_embeddings[layer], 
+            layer_embeddings=val_embeddings[layer], 
             labels=val_plot_labels,
             shift="no_shift"
         )
@@ -310,13 +310,13 @@ if __name__ == "__main__":
         # Shifted data ("test" dataset)
         for shift_name, idx_array in shift_to_indices_dict.items():
             print(f"Processing {shift_name}...")
-            shifted_labels = [arr[idx_array] for arr in test_plot_labels]
+            shifted_labels = {k: v[idx_array] for k, v in test_plot_labels.items()}
             process_and_visualise_layer(
                 output_dir=OUTPUT_DIR,
                 encoder_to_evaluate=ENCODER_TO_EVALUATE,
                 dataset=DATASET,
                 layer_name=layer,
-                features=test_embeddings[layer][idx_array],
+                layer_embeddings=test_embeddings[layer][idx_array],
                 labels=shifted_labels,
                 shift=shift_name
             )
@@ -327,13 +327,13 @@ if __name__ == "__main__":
                 shift=shift_name
             )
 
-    aggregate_and_plot_shifted_features(
-        output_dir=OUTPUT_DIR / "Aggregated",
+    aggregate_features_and_plot_shift_comparison(
+        output_dir=OUTPUT_DIR / "shift_comparison",
         encoder_to_evaluate=ENCODER_TO_EVALUATE,
         dataset=DATASET,
         layers=layers,
-        reference_features=val_embeddings,
-        test_features=test_embeddings,
+        val_embeddings=val_embeddings,
+        test_embeddings=test_embeddings,
         shift_to_indices_dict=shift_to_indices_dict,
     )
 

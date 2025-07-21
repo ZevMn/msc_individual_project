@@ -24,6 +24,7 @@ from experiments import shift_generator
 
 class Config:
     SEED = 42
+    PCA_COMPONENTS = 2
     BATCH_SIZE = 32
     NUM_WORKERS = 6
     
