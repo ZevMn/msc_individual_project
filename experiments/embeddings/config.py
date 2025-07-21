@@ -20,6 +20,7 @@ import torch
 
 from experiments import shift_generator
 
+@dataclass(frozen=True)
 class PlotConfig:    
     ALPHA = 0.8
     MARKER_SIZE = 40
@@ -27,6 +28,7 @@ class PlotConfig:
     FIGURE_SIZE = (14, 18)
     PCA_COMPONENTS = 2
 
+@dataclass(frozen=True)
 class Config:
     SEED = 42
     BATCH_SIZE = 32
@@ -153,6 +155,7 @@ class Config:
         np.random.seed(seed)
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
 
     @staticmethod
     def validate():
