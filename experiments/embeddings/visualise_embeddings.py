@@ -95,7 +95,8 @@ def process_and_visualise_layer(
     sample = df.sample(n=min(num_samples, len(df)), random_state=seed)
 
     # Create plots
-    sns.set_theme(style="white")
+    sns.set_theme(style="white", font_scale=1.2)
+    plt.rcParams.update({'font.family': 'serif'})
 
     fig, axes = plt.subplots(len(columns), 2, figsize=PlotConfig.FIGURE_SIZE, constrained_layout=True)
 
@@ -163,7 +164,9 @@ def aggregate_features_and_plot_shift_comparison(
         shift_to_indices_dict: A mapping of shift name to indices of covariate-shifted test subsets.
     """
 
-    sns.set_theme(style="white")
+    sns.set_theme(style="white", font_scale=1.2)
+    plt.rcParams.update({'font.family': 'serif'})
+    
     fig, axes = plt.subplots(len(layers), 2, figsize=PlotConfig.FIGURE_SIZE, constrained_layout=True)
 
     for i, layer in enumerate(layers):

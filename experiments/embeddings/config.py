@@ -153,3 +153,8 @@ class Config:
         np.random.seed(seed)
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
+
+    @staticmethod
+    def validate():
+        assert set(Config.DATASET_CONFIG.keys()) == set(Config.SHIFT_REGISTRY.keys()), \
+            "Mismatch between DATASET_CONFIG and SHIFT_REGISTRY datasets"

@@ -214,6 +214,7 @@ def run_experiment(
         dataset: str
     ) -> None:
 
+    Config.validate()
     Config.set_seeds(Config.SEED)
 
     # File paths
