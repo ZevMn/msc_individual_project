@@ -132,6 +132,7 @@ def process_and_visualise_layer(
     fig.suptitle(f"{dataset} | Scenario: {shift} - {layer_name}", fontsize=16)
 
     # Save the figure
+    output_dir.mkdir(parents=True, exist_ok=True)
     file_location = output_dir / f"{shift}_{layer_name}_{encoder_to_evaluate}.png"
     fig.savefig(file_location)
     plt.close(fig)
@@ -219,6 +220,7 @@ def aggregate_features_and_plot_shift_comparison(
     fig.suptitle(f"{dataset} | Shift Comparisons for all layers of {encoder_to_evaluate} encoder using PCA and t-SNE analysis", fontsize=16)
 
     # Save the figure
+    output_dir.mkdir(parents=True, exist_ok=True)
     file_location = output_dir / f"{dataset}_{encoder_to_evaluate}_shift_comparison.png"
     fig.savefig(file_location)
     plt.close(fig)

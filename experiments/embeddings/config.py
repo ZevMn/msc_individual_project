@@ -1,5 +1,5 @@
 """
-experiements/embeddings/config.py
+experiments/embeddings/config.py
 
 A configuration file for the embeddings module.
 

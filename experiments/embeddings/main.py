@@ -199,39 +199,26 @@ def calculate_bbsd_and_mmd(
         print(f"MMD negative for {shift} shift and {layer_name}\n")
 
 
-# ------------------------------------
-# Main execution
-# ------------------------------------
-if __name__ == "__main__":
+# --------------------------------------
+# Main function called in main execution
+# --------------------------------------
+def run_experiment(
+        encoder_to_evaluate: str,
+        feat_mode: str,
+        dataset: str
+    ) -> None:
+
     Config.set_seeds(Config.SEED)
 
-    # Optional: Configure global settings using CLI
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--encoder_type", 
-                        default=ENCODER_TO_EVALUATE,
-                        choices=list(Config.ENCODERS.keys()))
-    parser.add_argument("--feat_mode", 
-                        default=FEAT_MODE,
-                        choices=Config.FEAT_MODES)
-    parser.add_argument("--dataset", 
-                        default=DATASET,
-                        choices=list(Config.DATASET_CONFIG.keys()))
-    args = parser.parse_args()
-
-    ENCODER_TO_EVALUATE = args.encoder_type
-    FEAT_MODE = args.feat_mode
-    DATASET= args.dataset
-   
     # File paths
-    ENCODER_PICKLE_PATH = ROOT / "experiments" / "outputs"/ DATASET / Config.ENCODERS[ENCODER_TO_EVALUATE]
-    OUTPUT_DIR = ROOT / "experiments"/ "outputs" / DATASET / "Plots" / f"{ENCODER_TO_EVALUATE}/"
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)  # Ensure output directory exists
+    encoder_pickle_path = ROOT / "experiments" / "outputs"/ dataset / Config.ENCODERS[encoder_to_evaluate]
+    output_dir = ROOT / "experiments"/ "outputs" / dataset / "Plots" / f"{encoder_to_evaluate}/"
 
-    print(f"\n=== SCENARIO: {DATASET.upper()} | {ENCODER_TO_EVALUATE.upper()} | {FEAT_MODE.upper()} ===")
+    print(f"\n=== {dataset.upper()} | {encoder_to_evaluate.upper()} | {feat_mode.upper()} ===")
 
     ### 1. Process test and val CSVs
 
-    val_csv, test_csv = Config.DATASET_CONFIG[DATASET]["csv_files"]
+    val_csv, test_csv = Config.DATASET_CONFIG[dataset]["csv_files"]
 
     # Process the test and validation csv data
     print(f"Loading val data from '{val_csv}' and test data from '{test_csv}'...")
@@ -245,19 +232,19 @@ if __name__ == "__main__":
 
     ### 2. If feature embeddings don't already exist then generate them
 
-    if not Path.exists(ENCODER_PICKLE_PATH):
+    if not Path.exists(encoder_pickle_path):
 
-        val_preprocessed, test_preprocessed = preprocess_data(DATASET, val_df, test_df)
+        val_preprocessed, test_preprocessed = preprocess_data(dataset, val_df, test_df)
 
         # Generate the embeddings
-        print(f"Generating embeddings using '{ENCODER_TO_EVALUATE}' encoder...\n")
+        print(f"Generating embeddings using '{encoder_to_evaluate}' encoder...\n")
         get_or_save_outputs(
             model_to_evaluate=None,
-            encoder_to_evaluate=ENCODER_TO_EVALUATE,
+            encoder_to_evaluate=encoder_to_evaluate,
             val_loader=DataLoader(val_preprocessed, batch_size=Config.BATCH_SIZE, shuffle=False, num_workers=Config.NUM_WORKERS),
             test_loader=DataLoader(test_preprocessed, batch_size=Config.BATCH_SIZE, shuffle=False, num_workers=Config.NUM_WORKERS),
-            dataset_name=DATASET,
-            feat_mode=FEAT_MODE
+            dataset_name=dataset,
+            feat_mode=feat_mode
         )
 
         # Cleanup
@@ -267,8 +254,8 @@ if __name__ == "__main__":
 
     ### 3. Load and process the test and val feature embeddings to be plotted
 
-    print(f"Loading encoder output from {ENCODER_PICKLE_PATH}...")
-    encoder_output = load_embeddings(ENCODER_PICKLE_PATH)
+    print(f"Loading encoder output from {encoder_pickle_path}...")
+    encoder_output = load_embeddings(encoder_pickle_path)
 
     layers, val_embeddings, test_embeddings = validate_and_process_embeddings(encoder_output)
     print(f"Available layers for visualisation: {layers}")
@@ -277,12 +264,12 @@ if __name__ == "__main__":
         encoder_output["val"]["y"].cpu().numpy(),
         encoder_output["test"]["y"].cpu().numpy()
     )
-    val_plot_labels, test_plot_labels = extract_plot_labels(val_df, test_df, class_labels, DATASET)
+    val_plot_labels, test_plot_labels = extract_plot_labels(val_df, test_df, class_labels, dataset)
 
 
     ### 4. Generate covariate-shifted test subsets and store their original indices
     shift_to_indices_dict = {}
-    for shift_name, shift_fn in Config.SHIFT_REGISTRY[DATASET].items():
+    for shift_name, shift_fn in Config.SHIFT_REGISTRY[dataset].items():
         print(f"Simulating {shift_name} shift on test data...")
         df = shift_fn(test_df.copy(), random_state=Config.SEED)
         if "idx_in_original" not in df.columns:
@@ -298,9 +285,9 @@ if __name__ == "__main__":
         # Reference data ("val" dataset)
         print("Processing reference data (no shift)...")
         process_and_visualise_layer(
-            output_dir=OUTPUT_DIR,
-            encoder_to_evaluate=ENCODER_TO_EVALUATE,
-            dataset=DATASET,
+            output_dir=output_dir / "labelled_plots",
+            encoder_to_evaluate=encoder_to_evaluate,
+            dataset=dataset,
             layer_name=layer,
             layer_embeddings=val_embeddings[layer], 
             labels=val_plot_labels,
@@ -312,9 +299,9 @@ if __name__ == "__main__":
             print(f"Processing {shift_name}...")
             shifted_labels = {k: v[idx_array] for k, v in test_plot_labels.items()}
             process_and_visualise_layer(
-                output_dir=OUTPUT_DIR,
-                encoder_to_evaluate=ENCODER_TO_EVALUATE,
-                dataset=DATASET,
+                output_dir=output_dir / "labelled_plots",
+                encoder_to_evaluate=encoder_to_evaluate,
+                dataset=dataset,
                 layer_name=layer,
                 layer_embeddings=test_embeddings[layer][idx_array],
                 labels=shifted_labels,
@@ -328,14 +315,34 @@ if __name__ == "__main__":
             )
 
     aggregate_features_and_plot_shift_comparison(
-        output_dir=OUTPUT_DIR / "shift_comparison",
-        encoder_to_evaluate=ENCODER_TO_EVALUATE,
-        dataset=DATASET,
+        output_dir=output_dir / "shift_comparison",
+        encoder_to_evaluate=encoder_to_evaluate,
+        dataset=dataset,
         layers=layers,
         val_embeddings=val_embeddings,
         test_embeddings=test_embeddings,
         shift_to_indices_dict=shift_to_indices_dict,
     )
 
-    print(f"\n=== VISUALIZATION COMPLETE FOR SCENARIO: ===")
-    print(f"{DATASET.upper()} | {ENCODER_TO_EVALUATE.upper()} | {FEAT_MODE.upper()}\n")
+    print(f"\n=== VISUALIZATION COMPLETE ===")
+
+
+# ------------------------------------
+# Main execution
+# ------------------------------------
+if __name__ == "__main__":
+
+    # Optional: Configure global settings using CLI
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--encoder_to_evaluate", 
+                        default=ENCODER_TO_EVALUATE,
+                        choices=list(Config.ENCODERS.keys()))
+    parser.add_argument("--feat_mode", 
+                        default=FEAT_MODE,
+                        choices=Config.FEAT_MODES)
+    parser.add_argument("--dataset", 
+                        default=DATASET,
+                        choices=list(Config.DATASET_CONFIG.keys()))
+    args = parser.parse_args()
+
+    run_experiment(args.encoder_to_evaluate, args.feat_mode, args.dataset)
