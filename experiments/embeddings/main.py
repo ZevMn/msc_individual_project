@@ -327,10 +327,15 @@ if __name__ == "__main__":
                 shift=shift_name
             )
 
-        # aggregate_and_plot_shifted_features(
-        #     reference_features=val_embeddings_by_layer[layer],
-        #     shift_to_indices_dict=shift_to_indices_dict,
-        # )
+    aggregate_and_plot_shifted_features(
+        output_dir=OUTPUT_DIR / "Aggregated",
+        encoder_to_evaluate=ENCODER_TO_EVALUATE,
+        dataset=DATASET,
+        layers=layers,
+        reference_features=val_embeddings,
+        test_features=test_embeddings,
+        shift_to_indices_dict=shift_to_indices_dict,
+    )
 
     print(f"\n=== VISUALIZATION COMPLETE FOR SCENARIO: ===")
     print(f"{DATASET.upper()} | {ENCODER_TO_EVALUATE.upper()} | {FEAT_MODE.upper()}\n")

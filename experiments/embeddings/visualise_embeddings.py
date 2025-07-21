@@ -18,6 +18,28 @@ from sklearn.manifold import TSNE
 
 from typing import Sequence
 
+def calculate_PCA_and_tSNE(
+        embeddings: np.ndarray,
+        seed: int=Config.SEED, 
+        pca_components: int=2,
+    ):
+
+    # PCA reduction
+    pca = PCA(n_components=pca_components, whiten=False, random_state=seed)
+    embeddings_pca = pca.fit_transform(embeddings)
+    print(f"[{layer_name}] PCA shape: {embeddings_pca.shape}")
+    print(f"[{layer_name}] PCA explained variance ratio: {pca.explained_variance_ratio_[:2]}")
+
+    # Use the t-SNE algorithm on PCA-reduced features to obtain a 2D embedding for input data
+    embeddings_tsne = TSNE(n_components=pca_components, 
+                           init='random',
+                           learning_rate='auto',
+                           random_state=Config.SEED).fit_transform(embeddings_pca)
+    print(f"[{layer_name}] t-SNE shape: {embeddings_tsne.shape}")
+
+    return embeddings_pca, embeddings_tsne
+     
+
 
 # -----------------------------------
 # PCA and t-SNE analysis and plots
@@ -29,9 +51,8 @@ def process_and_visualise_layer(
         layer_name: str, 
         features: torch.Tensor, 
         labels: dict[str, np.ndarray], 
-        shift: str="no_shift", 
-        seed: int=Config.SEED, 
-        pca_components: int=2,
+        shift: str="no_shift",
+        seed: int=Config.SEED,
         num_samples: int=1000
     ) -> None:
     """
@@ -60,24 +81,12 @@ def process_and_visualise_layer(
     #                         replace=False)
     # embeddings = embeddings[sample_idx]
     # labels = [lbl[sample_idx] for lbl in labels]
-
-    # PCA reduction
-    #pca = PCA(n_components=0.95, whiten=False, random_state=seed) # PCA embedding that preserves 95% of the variance of the input data
-    pca = PCA(n_components=pca_components, whiten=False, random_state=Config.SEED)
-    embeddings_pca = pca.fit_transform(embeddings)
-    print(f"[{layer_name}] PCA shape: {embeddings_pca.shape}")
-    print(f"[{layer_name}] PCA explained variance ratio: {pca.explained_variance_ratio_[:2]}")
-
-    # Use the t-SNE algorithm on PCA-reduced features to obtain a 2D embedding for input data
-    embeddings_tsne = TSNE(n_components=2, 
-                           init='random',
-                           learning_rate='auto',
-                           random_state=Config.SEED).fit_transform(embeddings_pca)
-    print(f"[{layer_name}] t-SNE shape: {embeddings_tsne.shape}")
     
     # Create a pandas DataFrame to process data
     feature_attributes = Config.DATASET_CONFIG[dataset]["plot_columns"]
     df = pd.DataFrame({label: np_array for label, np_array in zip(feature_attributes, labels)})
+
+    embeddings_pca, embeddings_tsne = calculate_PCA_and_tSNE(embeddings)
 
     # Add PCA components and t-SNE components to the DataFrame
     for i in range(pca_components):
@@ -136,11 +145,10 @@ def aggregate_and_plot_shifted_features(
     output_dir: Path,  
     encoder_to_evaluate: str, 
     dataset: str,
-    layer_name: str,
-    reference_features: torch.Tensor, 
-    shifted_features_dict: dict,
-    reference_labels: list, 
-    shifted_labels_dict: dict,
+    layers: list[str],
+    reference_features: dict[str, torch.Tensor],
+    test_features: dict[str, torch.Tensor], 
+    shift_to_indices_dict: dict[str, np.ndarray],
 ) -> None:
     """
     Aggregates features from reference dataset and shifted datasets and plots 
@@ -151,16 +159,14 @@ def aggregate_and_plot_shifted_features(
         output_dir: Path to the directory where the plots will be saved.
         encoder_to_evaluate: Encoder used to generate features.
         dataset: Dataset name.
-        layer_name: Name of the layer to be processed.
-        reference_features: Feature embeddings from the reference dataset.
-        shifted_features_dict: A dictionary where keys are shift names, and values are shifted features.
-        reference_labels: Labels corresponding to the reference dataset features.
-        shifted_labels_dict: A dictionary where keys are shift names, and values are labels for shifted features.
+        layers: The layers of the encoder that embeddings have been extracted from.
+        reference_features: Feature embeddings from the val dataset.
+        reference_features: Feature embeddings from the test dataset.
+        shifted_features_dict: A mapping of shift name to indices of covariate-shifted test subsets.
     """
-    # Concatenate the reference features and shifted features
+    # Concatenate the reference features and shifted features so that they share a PCA space
     all_features = [reference_features]  # Start with reference
-    all_labels = [reference_labels]
-    shifts = ['no_shift']  # Reference shift name
+    shifts = ["no_shift"]  # Reference shift name
     for shift_name, shifted_features in shifted_features_dict.items():
         all_features.append(shifted_features)
         all_labels.append(shifted_labels_dict[shift_name])
