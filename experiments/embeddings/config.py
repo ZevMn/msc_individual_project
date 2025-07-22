@@ -19,11 +19,8 @@ from functools import partial
 import numpy as np
 import torch
 
-from dataclasses import dataclass
-
 from experiments import shift_generator
 
-@dataclass(frozen=True) # To guarrantee immutability
 class PlotConfig:    
     ALPHA = 0.8
     MARKER_SIZE = 40
@@ -31,7 +28,6 @@ class PlotConfig:
     FIGURE_SIZE = (14, 18)
     PCA_COMPONENTS = 2
 
-@dataclass(frozen=True) # To guarrantee immutability
 class Config:
     ROOT = Path(__file__).resolve().parent.parent.parent
     SEED = 42
