@@ -1,5 +1,9 @@
-""" 
+"""
 experiments/embeddings/driver.py
+
+Example usage:
+--------------
+    run_experiment(encoder_to_evaluate="imagenet", feat_mode="all", dataset="Mammo")
 """
 
 from pathlib import Path

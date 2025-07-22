@@ -1,31 +1,33 @@
-""" 
+"""
 experiments/embeddings/main.py
 
-This script generates visualisations of feature embeddings extracted from 
-various layers of a pre-trained encoder on mammography ("Mammo"), diabetic 
-retinopathy ("Retina"), and chest x-ray ("RSNA" and "PadChest") datasets.
+Entry point script to generate visualisations of feature embeddings from 
+multiple layers of a pre-trained encoder across several medical imaging datasets.
 
-For each layer, PCA and t-SNE are used to reduce dimensionality, allowing
-visual inspection of learned representations. The resulting plots are
-coloured by class as well as various other attribute labels depending on the 
-dataset. These plots are saved to a specified output directory.
+The pipeline:
+    1. Loads (or computes and caches) embeddings for validation/test splits.
+    2. Simulates predefined covariate/prevalence shifts on the test split.
+    3. Projects embeddings with PCA and t-SNE.
+    4. Produces layer-wise scatter/joint plots coloured by class and other
+       dataset-specific attributes.
+    5. Saves all figures under `experiments/outputs/<dataset>/Plots/<encoder>/`.
 
-Global settings to configure before running (also configurable via CLI arguments):
-    - ENCODER_TO_EVALUATE: encoder identifier
-    - FEAT_MODE: feature mode to use
-    - DATASET: dataset to be evaluated
+Command-line arguments (all optional - fall back to in-file defaults):
+    --encoder_to_evaluate   Encoder identifier: keys of 'Config.ENCODERS'.
+    --feat_mode             Feature mode: One of 'final', 'early', 'all'.
+    --dataset               Dataset name: keys of 'Config.DATASET_CONFIG'.
 
-Note: If you have previously generated an embeddings file using a different 
-feature mode, you must manually delete the existing *.pkl file before rerunning 
-this script. Adjust the output directory as needed.
+Note: If you change 'feat_mode' after embeddings have already been saved, delete 
+      the existing '*.pkl' file for that dataset and encoder before re-running.
 
-Usage:
-    # Run with the default settings declared at the top of the file
-    python visualise_embeddings.py
+Example usage:
+--------------
+# Use defaults declared below
+    python experiments/embeddings/main.py
 
-    # Override one or more settings from the command line
-    python visualise_embeddings.py \
-        --encoder_type imagenet \
+# Override settings from the CLI
+    python experiments/embeddings/main.py \
+        --encoder_to_evaluate imagenet \
         --feat_mode all \
         --dataset Mammo
 """
