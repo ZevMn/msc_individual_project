@@ -11,9 +11,6 @@ from torch.utils.data import DataLoader
 
 from experiments.inference_utils import get_or_save_outputs
 
-from shift_identification_detection.bbsd_tests import run_bbsd
-from shift_identification_detection.mmd_test import run_mmd_permutation_test
-
 from data_handling.mammo import EmbedDataset
 from data_handling.retina import RetinaDataset
 from data_handling.xray import RNSAPneumoniaDetectionDataset, PadChestDataset
@@ -47,7 +44,7 @@ def load_csvs_and_add_idx(
 # -----------------------------------------
 # If embeddings do not exist, generate them
 # -----------------------------------------
-def load_embeddings(
+def generate_and_load_embeddings(
         encoder_to_evaluate,
         feat_mode,
         dataset,
@@ -224,30 +221,9 @@ def validate_and_process_embeddings(
     return layers, val_embeddings, test_embeddings
 
 
-# -----------------------------------
-# BBSD and MMD analysis wrapper
-# -----------------------------------
-def calculate_bbsd_and_mmd(
-        source_distribution, # Val data
-        target_distribution, # Test data with simluated shift
-        layer_name: str,
-        shift: str
-    ) -> None:
-
-    if run_bbsd(source_distribution, target_distribution):
-        print(f"BBSD positive for {shift} shift and {layer_name}")
-    else:
-        print(f"BBSD negative for {shift} shift and {layer_name}")
-
-    if run_mmd_permutation_test(source_distribution, target_distribution):
-        print(f"MMD positive for {shift} shift and {layer_name}\n")
-    else:
-        print(f"MMD negative for {shift} shift and {layer_name}\n")
-
-
-# --------------------------------------
-# Main function called in main execution
-# --------------------------------------
+# ------------------------
+# Called in main execution
+# ------------------------
 def run_experiment(
         encoder_to_evaluate: str,
         feat_mode: str,
@@ -267,7 +243,7 @@ def run_experiment(
     )
 
     # Load embeddings and generate them if they don't already exist
-    encoder_output = load_embeddings(
+    encoder_output = generate_and_load_embeddings(
         encoder_to_evaluate=encoder_to_evaluate, 
         feat_mode=feat_mode,
         dataset=dataset, 
@@ -281,50 +257,21 @@ def run_experiment(
     )
 
     # Extract plot labels
-    val_plot_labels, test_plot_labels = extract_plot_labels(val_df, test_df, encoder_output, dataset)
-
+    val_labels, test_labels = extract_plot_labels(
+        val_df=val_df, 
+        test_df=test_df, 
+        encoder_output=encoder_output, 
+        dataset=dataset
+    )
 
     # Generate covariate-shifted test subsets and store their original indices
-    shift_to_indices_dict = simulate_shifts(dataset, test_df)
+    shift_to_indices_dict = simulate_shifts(
+        dataset=dataset, 
+        test_df=test_df
+    )
 
-    # Generate plots
-    for layer in layers:
-        print(f"\n--- Processing layer: {layer} ---")
-
-        # Reference data ("val" dataset)
-        print("\nProcessing reference data (no shift)...")
-        visualise_embeddings.plot_layer_representation_scatter(
-            output_dir=output_dir / "labelled_plots",
-            encoder_to_evaluate=encoder_to_evaluate,
-            dataset=dataset,
-            layer_name=layer,
-            layer_embeddings=val_embeddings[layer], 
-            labels=val_plot_labels,
-            shift="no_shift"
-        )
-
-        # Shifted data ("test" dataset)
-        for shift_name, idx_array in shift_to_indices_dict.items():
-            print(f"\nProcessing {shift_name}...")
-            shifted_labels = {k: v[idx_array] for k, v in test_plot_labels.items()}
-            visualise_embeddings.plot_layer_representation_scatter(
-                output_dir=output_dir / "labelled_plots",
-                encoder_to_evaluate=encoder_to_evaluate,
-                dataset=dataset,
-                layer_name=layer,
-                layer_embeddings=test_embeddings[layer][idx_array],
-                labels=shifted_labels,
-                shift=shift_name
-            )
-            calculate_bbsd_and_mmd(
-                source_distribution=val_embeddings[layer],
-                target_distribution=test_embeddings[layer][idx_array],
-                layer_name=layer, 
-                shift=shift_name
-            )
-
-    visualise_embeddings.plot_shift_comparison_scatter(
-        output_dir=output_dir / "shift_comparison",
+    # Generate plots 
+    inputs = visualise_embeddings.PlotInputs(
         encoder_to_evaluate=encoder_to_evaluate,
         dataset=dataset,
         layers=layers,
@@ -333,14 +280,20 @@ def run_experiment(
         shift_to_indices_dict=shift_to_indices_dict,
     )
 
+    visualise_embeddings.plot_labelled_scatter_for_all_layers(
+        output_dir=output_dir / "layer_representation",
+        inputs=inputs,
+        val_labels=val_labels,
+        test_labels=test_labels,
+        run_statistical_tests=False,
+    )
+    visualise_embeddings.plot_shift_comparison_scatter(
+        output_dir=output_dir / "shift_comparison",
+        inputs=inputs
+    )
     visualise_embeddings.plot_shift_comparison_joint(
         output_dir=output_dir / "shift_comparison",
-        encoder_to_evaluate=encoder_to_evaluate,
-        dataset=dataset,
-        layers=layers,
-        val_embeddings=val_embeddings,
-        test_embeddings=test_embeddings,
-        shift_to_indices_dict=shift_to_indices_dict,
+        inputs=inputs
     )
 
     print(f"\n=== VISUALIZATION COMPLETE ===")

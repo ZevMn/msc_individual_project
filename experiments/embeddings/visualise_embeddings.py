@@ -2,6 +2,7 @@
 experiments/embeddings/visualise_embeddings.py
 """
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Tuple
 
@@ -16,7 +17,19 @@ import torch
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
+from shift_identification_detection.bbsd_tests import run_bbsd
+from shift_identification_detection.mmd_test import run_mmd_permutation_test
+
 from config import PlotConfig, Config
+
+@dataclass
+class PlotInputs:
+    encoder_to_evaluate: str
+    dataset: str
+    layers: list[str]
+    val_embeddings: dict[str, torch.Tensor]
+    test_embeddings: dict[str, torch.Tensor]
+    shift_to_indices_dict: dict[str, np.ndarray]
 
 # ----------------
 # Helper functions
@@ -180,14 +193,78 @@ def plot_layer_representation_scatter(
     save_fig(fig, output_dir, f"{shift}_{layer_name}_{encoder_to_evaluate}.png")
 
 
+# -----------------------------------
+# BBSD and MMD analysis wrapper
+# -----------------------------------
+def calculate_bbsd_and_mmd(
+        source_distribution, # Val data
+        target_distribution, # Test data with simluated shift
+        layer_name: str,
+        shift: str
+    ) -> None:
+
+    if run_bbsd(source_distribution, target_distribution):
+        print(f"BBSD positive for {shift} shift and {layer_name}")
+    else:
+        print(f"BBSD negative for {shift} shift and {layer_name}")
+
+    if run_mmd_permutation_test(source_distribution, target_distribution):
+        print(f"MMD positive for {shift} shift and {layer_name}\n")
+    else:
+        print(f"MMD negative for {shift} shift and {layer_name}\n")
+
+
+def plot_labelled_scatter_for_all_layers(
+        output_dir: Path,
+        inputs: PlotInputs,
+        val_labels: dict[str, np.ndarray],
+        test_labels: dict[str, np.ndarray],
+        run_statistical_tests: bool=False,
+    ) -> None:
+
+    for layer in inputs.layers:
+        print(f"\n--- Processing layer: {layer} ---")
+
+        # Reference data (full val dataset)
+        print("\nProcessing reference data (no shift)...")
+        plot_layer_representation_scatter(
+            output_dir=output_dir / "labelled_plots",
+            encoder_to_evaluate=inputs.encoder_to_evaluate,
+            dataset=inputs.dataset,
+            layer_name=layer,
+            layer_embeddings=inputs.val_embeddings[layer], 
+            labels=val_labels,
+            shift="no_shift"
+        )
+
+        # Shifted data (test dataset subsets)
+        for shift_name, idx_array in inputs.shift_to_indices_dict.items():
+            print(f"\nProcessing {shift_name}...")
+            shifted_labels = {k: v[idx_array] for k, v in test_labels.items()}
+            plot_layer_representation_scatter(
+                output_dir=output_dir / "layer_representation",
+                encoder_to_evaluate=inputs.encoder_to_evaluate,
+                dataset=inputs.dataset,
+                layer_name=layer,
+                layer_embeddings=inputs.test_embeddings[layer][idx_array],
+                labels=shifted_labels,
+                shift=shift_name
+            )
+
+            if run_statistical_tests:
+                calculate_bbsd_and_mmd(
+                    source_distribution=inputs.val_embeddings[layer],
+                    target_distribution=inputs.test_embeddings[layer][idx_array],
+                    layer_name=layer, 
+                    shift=shift_name
+                )
+
+    return
+
+
 def plot_shift_comparison_scatter(
     output_dir: Path,  
-    encoder_to_evaluate: str, 
-    dataset: str,
-    layers: list[str],
-    val_embeddings: dict[str, torch.Tensor],
-    test_embeddings: dict[str, torch.Tensor], 
-    shift_to_indices_dict: dict[str, np.ndarray],
+    inputs: PlotInputs,
 ) -> None:
     """
     Aggregates features from reference dataset and shifted datasets and plots 
@@ -206,15 +283,15 @@ def plot_shift_comparison_scatter(
 
     set_plot_style()
 
-    fig, axes = plt.subplots(len(layers), 2, figsize=PlotConfig.FIGURE_SIZE, constrained_layout=True)
+    fig, axes = plt.subplots(len(inputs.layers), 2, figsize=PlotConfig.FIGURE_SIZE, constrained_layout=True)
 
-    for i, layer in enumerate(layers):
+    for i, layer in enumerate(inputs.layers):
 
         # Concatenate the reference features and shifted features so that they share a PCA space
         cat_embeddings, shift_labels = concat_embeddings(
-            val_embeddings_layer=val_embeddings[layer],
-            test_embeddings_layer=test_embeddings[layer],
-            shift_to_indices_dict=shift_to_indices_dict
+            val_embeddings_layer=inputs.val_embeddings[layer],
+            test_embeddings_layer=inputs.test_embeddings[layer],
+            shift_to_indices_dict=inputs.shift_to_indices_dict
         )
 
         # PCA and t-SNE
@@ -256,19 +333,14 @@ def plot_shift_comparison_scatter(
     for ax in axes.ravel():
         sns.move_legend(ax, loc="upper left", bbox_to_anchor=(1,1))
 
-    fig.suptitle(f"{dataset} | Shift Comparisons for All Layers of {encoder_to_evaluate} Encoder Using PCA and t-SNE Analysis", fontsize=16)
+    fig.suptitle(f"{inputs.dataset} | Shift Comparisons for All Layers of {inputs.encoder_to_evaluate} Encoder Using PCA and t-SNE Analysis", fontsize=16)
 
-    save_fig(fig, output_dir, f"{dataset}_{encoder_to_evaluate}_shift_comparison_scatterplots.png")
+    save_fig(fig, output_dir, f"{inputs.dataset}_{inputs.encoder_to_evaluate}_shift_comparison_scatterplots.png")
 
 
 def plot_shift_comparison_joint(
     output_dir: Path,  
-    encoder_to_evaluate: str, 
-    dataset: str,
-    layers: list[str],
-    val_embeddings: dict[str, torch.Tensor],
-    test_embeddings: dict[str, torch.Tensor], 
-    shift_to_indices_dict: dict[str, np.ndarray],
+    inputs: PlotInputs
 ) -> None:
     """
     Creates and saves seaborn jointplots (scatter + marginal densities) of PCA and t-SNE
@@ -288,13 +360,13 @@ def plot_shift_comparison_joint(
 
     set_plot_style()
 
-    for layer in layers:
+    for layer in inputs.layers:
 
         # Concatenate the reference features and shifted features so that they share a PCA space
         cat_embeddings, shift_labels = concat_embeddings(
-            val_embeddings_layer=val_embeddings[layer],
-            test_embeddings_layer=test_embeddings[layer],
-            shift_to_indices_dict=shift_to_indices_dict
+            val_embeddings_layer=inputs.val_embeddings[layer],
+            test_embeddings_layer=inputs.test_embeddings[layer],
+            shift_to_indices_dict=inputs.shift_to_indices_dict
         )
 
         # PCA and t-SNE
@@ -325,11 +397,11 @@ def plot_shift_comparison_joint(
         )
         if g_pca.ax_joint.legend_ is not None:
             g_pca.ax_joint.legend_.set_bbox_to_anchor((1.1, 1))
-        g_pca.figure.suptitle(f"{dataset} | PCA Shift Comparison | {layer}", fontsize=14)
+        g_pca.figure.suptitle(f"{inputs.dataset} | PCA Shift Comparison | {layer}", fontsize=14)
         g_pca.figure.tight_layout()
         g_pca.figure.subplots_adjust(top=0.9, right=0.8)
 
-        save_fig(g_pca.figure, output_dir, f"{dataset}_{encoder_to_evaluate}_{layer}_PCA_jointplot.png")
+        save_fig(g_pca.figure, output_dir, f"{inputs.dataset}_{inputs.encoder_to_evaluate}_{layer}_PCA_jointplot.png")
 
         # Create t-SNE jointplot
         g_tsne = sns.jointplot(
@@ -348,8 +420,8 @@ def plot_shift_comparison_joint(
         )
         if g_tsne.ax_joint.legend_ is not None:
             g_tsne.ax_joint.legend_.set_bbox_to_anchor((1.1, 1))
-        g_tsne.figure.suptitle(f"{dataset} | t-SNE Shift Comparison | {layer}", fontsize=14)
+        g_tsne.figure.suptitle(f"{inputs.dataset} | t-SNE Shift Comparison | {layer}", fontsize=14)
         g_tsne.figure.tight_layout()
         g_tsne.figure.subplots_adjust(top=0.9, right=0.8)
 
-        save_fig(g_tsne.figure, output_dir, f"{dataset}_{encoder_to_evaluate}_{layer}_tSNE_jointplot.png")
+        save_fig(g_tsne.figure, output_dir, f"{inputs.dataset}_{inputs.encoder_to_evaluate}_{layer}_tSNE_jointplot.png")
