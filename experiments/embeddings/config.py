@@ -157,6 +157,9 @@ class Config:
         torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.deterministic = True
 
+    # --------------------------------------------------------------------
+    # Ensure datasets in DATASET_CONFIG are consistent with SHIFT_REGISTRY
+    # --------------------------------------------------------------------
     @staticmethod
     def validate():
         assert set(Config.DATASET_CONFIG.keys()) == set(Config.SHIFT_REGISTRY.keys()), \

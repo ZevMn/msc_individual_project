@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Tuple
 
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 import seaborn as sns
 
 import numpy as np
@@ -17,6 +18,53 @@ from sklearn.manifold import TSNE
 
 from config import PlotConfig, Config
 
+# ----------------
+# Helper functions
+# ----------------
+def set_plot_style() -> None:
+    """
+    Apply a consistent seaborn/matplotlib style.
+    """ 
+    sns.set_theme(style="white", font_scale=1.2)
+    plt.rcParams.update({'font.family': 'serif'})
+
+
+def concat_embeddings(
+    val_embeddings_layer: torch.Tensor,
+    test_embeddings_layer: torch.Tensor,
+    shift_to_indices_dict: dict[str, np.ndarray],
+) -> tuple[torch.Tensor, list[str]]:
+    """
+    Concatenate validation embeddings with each shifted subset of test embeddings,
+    returning the combined tensor and it's associated list of shift labels.
+    """
+    cat_embeddings = [val_embeddings_layer]
+    shift_labels = ["no_shift"] * len(val_embeddings_layer)
+
+    for shift_name, idx_array in shift_to_indices_dict.items():
+        shift_embeddings = test_embeddings_layer[idx_array]
+        cat_embeddings.append(shift_embeddings)
+        shift_labels.extend([shift_name] * len(shift_embeddings))
+
+    return torch.cat(cat_embeddings), shift_labels
+
+
+def save_fig(
+        fig: Figure, 
+        file_location: Path
+    ) -> None:
+    """
+    Create dirs, save, close and print once.
+    """
+    file_location.mkdir(parents=True, exist_ok=True)
+    fig.savefig(file_location, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[Saved] {file_location}")
+
+
+# -------------
+# PCA and t-SNE
+# -------------
 def calculate_PCA_and_tSNE(
         embeddings: torch.Tensor,
         seed: int=Config.SEED, 
@@ -51,10 +99,10 @@ def calculate_PCA_and_tSNE(
      
 
 
-# -----------------------------------
-# PCA and t-SNE analysis and plots
-# -----------------------------------
-def process_and_visualise_layer(
+# ------------------
+# Plotting functions
+# ------------------
+def plot_layer_representation_scatter(
         output_dir: Path,
         encoder_to_evaluate: str,
         dataset: str,
@@ -63,8 +111,7 @@ def process_and_visualise_layer(
         labels: dict[str, np.ndarray], 
         shift: str="no_shift",
         seed: int=Config.SEED,
-        pca_components: int=PlotConfig.PCA_COMPONENTS,
-        num_samples: int=1000
+        num_samples: int=1000,
     ) -> None:
     """
     Processes data, reduces dimensionality, and visualises layer features.
@@ -82,33 +129,31 @@ def process_and_visualise_layer(
         num_samples: The number of points to include in the final plot.
     """
 
+    set_plot_style()
+
+    columns = Config.DATASET_CONFIG[dataset]["plot_columns"]
+    fig, axes = plt.subplots(len(columns), 2, figsize=PlotConfig.FIGURE_SIZE, constrained_layout=True)
+
+    # PCA and t-SNE
     embeddings_pca, embeddings_tsne = calculate_PCA_and_tSNE(layer_embeddings)
 
-    # Create a pandas DataFrame to process data
-    columns = Config.DATASET_CONFIG[dataset]["plot_columns"]
-    df = pd.DataFrame({col: labels[col] for col in columns})
-
-    # Add PCA components and t-SNE components to the DataFrame
-    for i in range(pca_components):
-        df[f"{layer_name} - PCA {i+1}"] = embeddings_pca[:,i]
-    df[f"{layer_name} - t-SNE 1"] = embeddings_tsne[:,0]
-    df[f"{layer_name} - t-SNE 2"] = embeddings_tsne[:,1]
+    df = pd.DataFrame({
+        **{col: labels[col] for col in columns},
+        "PCA 1":  embeddings_pca[:,0],
+        "PCA 2":  embeddings_pca[:,1],
+        "t-SNE 1": embeddings_tsne[:,0],
+        "t-SNE 2": embeddings_tsne[:,1],
+    })
 
     # Sample for plotting
     sample = df.sample(n=min(num_samples, len(df)), random_state=seed)
-
-    # Create plots
-    sns.set_theme(style="white", font_scale=1.2)
-    plt.rcParams.update({'font.family': 'serif'})
-
-    fig, axes = plt.subplots(len(columns), 2, figsize=PlotConfig.FIGURE_SIZE, constrained_layout=True)
 
     for i, column in enumerate(columns):
         # PCA plot (left column)
         ax_pca = sns.scatterplot(
             data=sample, 
-            x=f"{layer_name} - PCA 1", 
-            y=f"{layer_name} - PCA 2", 
+            x="PCA 1", 
+            y="PCA 2", 
             hue=column, 
             alpha=PlotConfig.ALPHA, 
             marker="o", 
@@ -120,8 +165,8 @@ def process_and_visualise_layer(
         # t-SNE plot
         ax_tsne = sns.scatterplot(
             data=sample, 
-            x=f"{layer_name} - t-SNE 1", 
-            y=f"{layer_name} - t-SNE 2", 
+            x="t-SNE 1", 
+            y="t-SNE 2", 
             hue=column, 
             alpha=PlotConfig.ALPHA, 
             marker="o", 
@@ -135,15 +180,10 @@ def process_and_visualise_layer(
 
     fig.suptitle(f"{dataset} | Scenario: {shift} - {layer_name}", fontsize=16)
 
-    # Save the figure
-    output_dir.mkdir(parents=True, exist_ok=True)
-    file_location = output_dir / f"{shift}_{layer_name}_{encoder_to_evaluate}.png"
-    fig.savefig(file_location)
-    plt.close(fig)
-    print(f"[Saved] {file_location}")
+    save_fig(fig, output_dir / f"{shift}_{layer_name}_{encoder_to_evaluate}.png")
 
 
-def aggregate_features_and_plot_shift_comparison(
+def plot_shift_comparison_scatter(
     output_dir: Path,  
     encoder_to_evaluate: str, 
     dataset: str,
@@ -154,7 +194,7 @@ def aggregate_features_and_plot_shift_comparison(
 ) -> None:
     """
     Aggregates features from reference dataset and shifted datasets and plots 
-    PCA and t-SNE scatter-plots and density-plots to compare how the feature spaces and
+    PCA and t-SNE scatterplots to compare how the feature spaces and
     learnt representations differ between different layers of the encoder.
 
     Args:
@@ -167,23 +207,18 @@ def aggregate_features_and_plot_shift_comparison(
         shift_to_indices_dict: A mapping of shift name to indices of covariate-shifted test subsets.
     """
 
-    sns.set_theme(style="white", font_scale=1.2)
-    plt.rcParams.update({'font.family': 'serif'})
+    set_plot_style()
 
     fig, axes = plt.subplots(len(layers), 2, figsize=PlotConfig.FIGURE_SIZE, constrained_layout=True)
 
     for i, layer in enumerate(layers):
 
         # Concatenate the reference features and shifted features so that they share a PCA space
-        cat_embeddings = [val_embeddings[layer]]
-        shift_labels = ["no_shift"] * len(val_embeddings[layer])
-
-        for shift_name, idx_array in shift_to_indices_dict.items():
-            shift_embeddings = test_embeddings[layer][idx_array]
-            cat_embeddings.append(shift_embeddings)
-            shift_labels.extend([shift_name] * len(shift_embeddings))
-
-        cat_embeddings = torch.cat(cat_embeddings)
+        cat_embeddings, shift_labels = concat_embeddings(
+            val_embeddings_layer=val_embeddings[layer],
+            test_embeddings_layer=test_embeddings[layer],
+            shift_to_indices_dict=shift_to_indices_dict
+        )
 
         # PCA and t-SNE
         embeddings_pca, embeddings_tsne = calculate_PCA_and_tSNE(cat_embeddings)
@@ -208,17 +243,6 @@ def aggregate_features_and_plot_shift_comparison(
             palette=PlotConfig.COLOR_PALETTE, 
             ax=axes[i, 0])
         ax_pca.set_title(f"PCA Shift Comparison for {layer}")
-        
-        # PCA density plot (overlay)
-        sns.kdeplot(
-            data=df, 
-            x="PCA 1", 
-            y="PCA 2", 
-            hue="Shift", 
-            fill=True, 
-            alpha=0.3, 
-            palette=PlotConfig.COLOR_PALETTE, 
-            ax=axes[i, 0])
 
         # t-SNE plot (right column)
         ax_tsne = sns.scatterplot(
@@ -232,25 +256,103 @@ def aggregate_features_and_plot_shift_comparison(
             ax=axes[i, 1])
         ax_tsne.set_title(f"t-SNE Shift Comparison for {layer}")
 
-        # t-SNE density plot (overlay)
-        sns.kdeplot(
-            data=df, 
-            x="t-SNE 1", 
-            y="t-SNE 2", 
-            hue="Shift", 
-            fill=True, 
-            alpha=0.3, 
-            palette=PlotConfig.COLOR_PALETTE, 
-            ax=axes[i, 1])
-
     for ax in axes.ravel():
         sns.move_legend(ax, loc="upper left", bbox_to_anchor=(1,1))
 
     fig.suptitle(f"{dataset} | Shift Comparisons for All Layers of {encoder_to_evaluate} Encoder Using PCA and t-SNE Analysis", fontsize=16)
 
-    # Save the figure
-    output_dir.mkdir(parents=True, exist_ok=True)
-    file_location = output_dir / f"{dataset}_{encoder_to_evaluate}_shift_comparison.png"
-    fig.savefig(file_location)
-    plt.close(fig)
-    print(f"[Saved] {file_location}")
+    save_fig(fig, output_dir / f"{dataset}_{encoder_to_evaluate}_shift_comparison_scatterplots.png")
+
+
+def plot_shift_comparison_joint(
+    output_dir: Path,  
+    encoder_to_evaluate: str, 
+    dataset: str,
+    layers: list[str],
+    val_embeddings: dict[str, torch.Tensor],
+    test_embeddings: dict[str, torch.Tensor], 
+    shift_to_indices_dict: dict[str, np.ndarray],
+) -> None:
+    """
+    Creates and saves seaborn jointplots (scatter + marginal densities) of PCA and t-SNE
+    projections for each encoder layer, comparing reference and shifted distributions.
+
+    Args:
+        output_dir: Directory to save the jointplots.
+        encoder_to_evaluate: Name of encoder.
+        dataset: Name of dataset.
+        layers: List of encoder layers to plot.
+        val_embeddings: Embeddings from reference (validation) set.
+        test_embeddings: Embeddings from test (possibly shifted) set.
+        shift_to_indices_dict: Dictionary mapping shift name to indices in test set.
+        seed: Random seed for reproducibility.
+        num_samples: Max number of points to plot.
+    """
+
+    set_plot_style()
+
+    for layer in layers:
+
+        # Concatenate the reference features and shifted features so that they share a PCA space
+        cat_embeddings, shift_labels = concat_embeddings(
+            val_embeddings_layer=val_embeddings[layer],
+            test_embeddings_layer=test_embeddings[layer],
+            shift_to_indices_dict=shift_to_indices_dict
+        )
+
+        # PCA and t-SNE
+        embeddings_pca, embeddings_tsne = calculate_PCA_and_tSNE(cat_embeddings)
+
+        df = pd.DataFrame({
+            "PCA 1": embeddings_pca[:, 0],
+            "PCA 2": embeddings_pca[:, 1],
+            "t-SNE 1": embeddings_tsne[:, 0],
+            "t-SNE 2": embeddings_tsne[:, 1],
+            "Shift": shift_labels,
+        })
+
+        # Create PCA jointplot
+        g_pca = sns.jointplot(
+            data=df,
+            x="PCA 1",
+            y="PCA 2",
+            hue="Shift",
+            kind="scatter",
+            height=8,
+            ratio=5,
+            space=0.1,
+            alpha=PlotConfig.ALPHA,
+            s=PlotConfig.MARKER_SIZE,
+            palette=PlotConfig.COLOR_PALETTE,
+            marginal_kws=dict(common_norm=False, fill=True),
+        )
+        if g_pca.ax_joint.legend_ is not None:
+            g_pca.ax_joint.legend_.set_bbox_to_anchor((1.1, 1))
+        g_pca.figure.suptitle(f"{dataset} | PCA Shift Comparison | {layer}", fontsize=14)
+        g_pca.figure.tight_layout()
+        g_pca.figure.subplots_adjust(top=0.9, right=0.8)
+
+        save_fig(g_pca.figure, output_dir / f"{dataset}_{encoder_to_evaluate}_{layer}_PCA_jointplot.png")
+
+        # Create t-SNE jointplot
+        g_tsne = sns.jointplot(
+            data=df,
+            x="t-SNE 1",
+            y="t-SNE 2",
+            hue="Shift",
+            kind="scatter",
+            height=8,
+            ratio=5,
+            space=0.1,
+            alpha=PlotConfig.ALPHA,
+            s=PlotConfig.MARKER_SIZE,
+            palette=PlotConfig.COLOR_PALETTE,
+            marginal_kws=dict(common_norm=False, fill=True),
+        )
+        if g_tsne.ax_joint.legend_ is not None:
+            g_tsne.ax_joint.legend_.set_bbox_to_anchor((1.1, 1))
+        g_tsne.figure.suptitle(f"{dataset} | t-SNE Shift Comparison | {layer}", fontsize=14)
+        g_tsne.figure.tight_layout()
+        g_tsne.figure.subplots_adjust(top=0.9, right=0.8)
+
+        save_fig(g_tsne.figure, output_dir / f"{dataset}_{encoder_to_evaluate}_{layer}_tSNE_jointplot.png")

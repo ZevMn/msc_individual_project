@@ -22,7 +22,7 @@ from config import Config
 
 from embeddings_io import load_embeddings
 
-from visualise_embeddings import process_and_visualise_layer, aggregate_features_and_plot_shift_comparison
+import visualise_embeddings
 
 # -------------------------------------------------------------
 # Generate dicts of {label names: feature labels to be plotted}
@@ -177,11 +177,12 @@ def run_experiment(
     ) -> None:
 
     Config.validate()
-    Config.set_seeds(Config.SEED)
+    Config.set_seeds()
 
     # File paths
-    encoder_pickle_path = Config.ROOT / "experiments" / "outputs"/ dataset / Config.ENCODERS[encoder_to_evaluate]
-    output_dir = Config.ROOT / "experiments"/ "outputs" / dataset / "Plots" / f"{encoder_to_evaluate}/"
+    path_to_dataset = Config.ROOT / "experiments" / "outputs"/ dataset
+    encoder_pickle_path =  path_to_dataset / Config.ENCODERS[encoder_to_evaluate]
+    output_dir = path_to_dataset / "Plots" / encoder_to_evaluate
 
     print(f"\n=== {dataset.upper()} | {encoder_to_evaluate.upper()} | {feat_mode.upper()} ===")
 
@@ -251,8 +252,8 @@ def run_experiment(
         print(f"\n--- Processing layer: {layer} ---")
 
         # Reference data ("val" dataset)
-        print("Processing reference data (no shift)...")
-        process_and_visualise_layer(
+        print("\nProcessing reference data (no shift)...")
+        visualise_embeddings.plot_layer_representation_scatter(
             output_dir=output_dir / "labelled_plots",
             encoder_to_evaluate=encoder_to_evaluate,
             dataset=dataset,
@@ -264,9 +265,9 @@ def run_experiment(
 
         # Shifted data ("test" dataset)
         for shift_name, idx_array in shift_to_indices_dict.items():
-            print(f"Processing {shift_name}...")
+            print(f"\nProcessing {shift_name}...")
             shifted_labels = {k: v[idx_array] for k, v in test_plot_labels.items()}
-            process_and_visualise_layer(
+            visualise_embeddings.plot_layer_representation_scatter(
                 output_dir=output_dir / "labelled_plots",
                 encoder_to_evaluate=encoder_to_evaluate,
                 dataset=dataset,
@@ -282,7 +283,17 @@ def run_experiment(
             #     shift=shift_name
             # )
 
-    aggregate_features_and_plot_shift_comparison(
+    visualise_embeddings.plot_shift_comparison_scatter(
+        output_dir=output_dir / "shift_comparison",
+        encoder_to_evaluate=encoder_to_evaluate,
+        dataset=dataset,
+        layers=layers,
+        val_embeddings=val_embeddings,
+        test_embeddings=test_embeddings,
+        shift_to_indices_dict=shift_to_indices_dict,
+    )
+
+    visualise_embeddings.plot_shift_comparison_joint(
         output_dir=output_dir / "shift_comparison",
         encoder_to_evaluate=encoder_to_evaluate,
         dataset=dataset,
