@@ -2,12 +2,6 @@
 experiments/embeddings/config.py
 
 A configuration file for the embeddings module.
-
-Contains default assignments for constants and plot styling, as well
-as config maps for the encoders and datasets.
-
-Also contains a helper function to set all seeds so that RNG is 
-deterministic and reproducable for all experiments.
 """
 
 import random
@@ -21,13 +15,41 @@ import torch
 
 from experiments import shift_generator
 
-class PlotConfig:    
+class PlotConfig: 
+    """
+    Plotting parameters used in visualise_embeddings.py.
+    """   
     ALPHA = 0.8
     MARKER_SIZE = 40
     COLOR_PALETTE = 'tab10'
     FIGURE_SIZE = (14, 18)
 
 class Config:
+    """
+    Global configuration and registries for embedding experiments.
+
+    Attributes:
+        ROOT: Project root directory (resolved from this file's path).
+        SEED: Default random seed for reproducibility.
+        BATCH_SIZE: Default dataloader batch size.
+        NUM_WORKERS: Number of workers for PyTorch dataloaders.
+
+        FEAT_MODES: Permissible feature extraction modes ('final', 'early', 'all').
+
+        ENCODERS: Mapping from encoder name to filename on disk.
+
+        DATASET_CONFIG: Per-dataset metadata containing:
+            - 'csv_files': Filenames for validation/test embedding CSVs.
+            - 'column_map': Mapping from friendly column names to CSV column names.
+            - 'plot_columns': Ordered list of categorical columns to colour plots by.
+
+        SHIFT_REGISTRY: Nested mapping from dataset name to shift name to a callable
+            that, when invoked, produces indices describing a type of covariate shift.
+
+    Methods:
+        set_seeds: Set all relevant RNG seeds (Python, NumPy, PyTorch) for determinism.
+        validate: Assert that DATASET_CONFIG and SHIFT_REGISTRY list the same datasets.
+    """
     ROOT = Path(__file__).resolve().parent.parent.parent
     SEED = 42
     BATCH_SIZE = 32
@@ -154,7 +176,7 @@ class Config:
         np.random.seed(seed)
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
+
 
     # --------------------------------------------------------------------
     # Ensure datasets in DATASET_CONFIG are consistent with SHIFT_REGISTRY
