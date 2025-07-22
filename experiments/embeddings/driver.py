@@ -20,9 +20,65 @@ from data_handling.xray import RNSAPneumoniaDetectionDataset, PadChestDataset
 
 from config import Config
 
-from embeddings_io import load_embeddings
+from embeddings_io import load_embeddings_pkl
 
 import visualise_embeddings
+
+# --------------------------------------------------------
+# Generate val and test csvs into dfs and add index column
+# --------------------------------------------------------
+def load_csvs_and_add_idx(
+        dataset: str
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+
+    val_csv, test_csv = Config.DATASET_CONFIG[dataset]["csv_files"]
+
+    print(f"Loading val data from '{val_csv}' and test data from '{test_csv}'...")
+    val_df = pd.read_csv(Config.ROOT / "experiments" / val_csv)
+    test_df = pd.read_csv(Config.ROOT / "experiments" / test_csv)
+
+    # Create index column to track features
+    val_df["idx_in_original"] = np.arange(len(val_df))
+    test_df["idx_in_original"] = np.arange(len(test_df))
+
+    return val_df, test_df
+
+
+# -----------------------------------------
+# If embeddings do not exist, generate them
+# -----------------------------------------
+def load_embeddings(
+        encoder_to_evaluate,
+        feat_mode,
+        dataset,
+        val_df, 
+        test_df
+    ) -> dict[str, dict[str, torch.Tensor]]:
+
+    encoder_pickle_path =  Config.ROOT / "experiments" / "outputs"/ dataset / Config.ENCODERS[encoder_to_evaluate]
+
+    if not Path.exists(encoder_pickle_path):
+
+        val_preprocessed, test_preprocessed = preprocess_data(dataset, val_df, test_df)
+
+        # Generate the embeddings
+        print(f"Generating embeddings using '{encoder_to_evaluate}' encoder...\n")
+        get_or_save_outputs(
+            model_to_evaluate=None,
+            encoder_to_evaluate=encoder_to_evaluate,
+            val_loader=DataLoader(val_preprocessed, batch_size=Config.BATCH_SIZE, shuffle=False, num_workers=Config.NUM_WORKERS),
+            test_loader=DataLoader(test_preprocessed, batch_size=Config.BATCH_SIZE, shuffle=False, num_workers=Config.NUM_WORKERS),
+            dataset_name=dataset,
+            feat_mode=feat_mode
+        )
+
+        # Cleanup
+        torch.cuda.empty_cache()
+
+    print(f"Loading encoder output from {encoder_pickle_path}...")
+    
+    return load_embeddings_pkl(encoder_pickle_path)
+
 
 # -------------------------------------------------------------
 # Generate dicts of {label names: feature labels to be plotted}
@@ -30,7 +86,7 @@ import visualise_embeddings
 def extract_plot_labels(
         val_df: pd.DataFrame, 
         test_df: pd.DataFrame, 
-        class_labels: tuple[np.ndarray, np.ndarray],
+        encoder_output: dict[str, dict[str, torch.Tensor]],
         dataset: str
     ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
     """
@@ -54,6 +110,7 @@ def extract_plot_labels(
                                                     of labels extracted from the "test" dataset.
     """
 
+
     val_plot_labels = {}
     test_plot_labels = {}
 
@@ -63,8 +120,8 @@ def extract_plot_labels(
     for label in ordered_columns:
         if label == "class":
             # Class labels come from the encoder output, not the csv
-            val_plot_labels["class"] = class_labels[0]
-            test_plot_labels["class"] = class_labels[1]
+            val_plot_labels["class"] = encoder_output["val"]["y"].cpu().numpy()
+            test_plot_labels["class"] = encoder_output["test"]["y"].cpu().numpy()
             continue
 
         col_name = column_map[label]
@@ -76,6 +133,25 @@ def extract_plot_labels(
         test_plot_labels[label] = test_df[col_name].to_numpy()
 
     return val_plot_labels, test_plot_labels
+
+
+def simulate_shifts(
+        dataset: str, 
+        test_df: pd.DataFrame
+    ) -> dict[str, np.ndarray]:
+
+    shift_to_indices_dict = {}
+
+    for shift_name, shift_fn in Config.SHIFT_REGISTRY[dataset].items():
+        print(f"Simulating {shift_name} shift on test data...")
+        df = shift_fn(test_df.copy(), random_state=Config.SEED)
+
+        if "idx_in_original" not in df.columns:
+            raise ValueError(f"Shift function '{shift_name}' must preserve 'idx_in_original' column.")
+        
+        shift_to_indices_dict[shift_name] = df["idx_in_original"].to_numpy()
+
+    return shift_to_indices_dict
 
 
 # -----------------------------------------
@@ -143,6 +219,8 @@ def validate_and_process_embeddings(
     val_embeddings = {k: v for k, v in encoder_output["val"].items() if k != "y"}
     test_embeddings = {k: v for k, v in encoder_output["test"].items() if k != "y"}
 
+    print(f"Available layers for visualisation: {layers}\n")
+
     return layers, val_embeddings, test_embeddings
 
 
@@ -179,75 +257,37 @@ def run_experiment(
     Config.validate()
     Config.set_seeds()
 
-    # File paths
-    path_to_dataset = Config.ROOT / "experiments" / "outputs"/ dataset
-    encoder_pickle_path =  path_to_dataset / Config.ENCODERS[encoder_to_evaluate]
-    output_dir = path_to_dataset / "Plots" / encoder_to_evaluate
+    output_dir = Config.ROOT / "experiments" / "outputs"/ dataset / "Plots" / encoder_to_evaluate
 
     print(f"\n=== {dataset.upper()} | {encoder_to_evaluate.upper()} | {feat_mode.upper()} ===\n")
 
-    ### 1. Process test and val CSVs
-
-    val_csv, test_csv = Config.DATASET_CONFIG[dataset]["csv_files"]
-
-    # Process the test and validation csv data
-    print(f"Loading val data from '{val_csv}' and test data from '{test_csv}'...")
-    val_df = pd.read_csv(Config.ROOT / "experiments" / val_csv)
-    test_df = pd.read_csv(Config.ROOT / "experiments" / test_csv)
-
-    # Create index column to track features
-    val_df["idx_in_original"] = np.arange(len(val_df))
-    test_df["idx_in_original"] = np.arange(len(test_df))
-
-
-    ### 2. If feature embeddings don't already exist then generate them
-
-    if not Path.exists(encoder_pickle_path):
-
-        val_preprocessed, test_preprocessed = preprocess_data(dataset, val_df, test_df)
-
-        # Generate the embeddings
-        print(f"Generating embeddings using '{encoder_to_evaluate}' encoder...\n")
-        get_or_save_outputs(
-            model_to_evaluate=None,
-            encoder_to_evaluate=encoder_to_evaluate,
-            val_loader=DataLoader(val_preprocessed, batch_size=Config.BATCH_SIZE, shuffle=False, num_workers=Config.NUM_WORKERS),
-            test_loader=DataLoader(test_preprocessed, batch_size=Config.BATCH_SIZE, shuffle=False, num_workers=Config.NUM_WORKERS),
-            dataset_name=dataset,
-            feat_mode=feat_mode
-        )
-
-        # Cleanup
-        torch.cuda.empty_cache()
-
-
-    ### 3. Load and process the test and val feature embeddings to be plotted
-
-    print(f"Loading encoder output from {encoder_pickle_path}...")
-    encoder_output = load_embeddings(encoder_pickle_path)
-
-    layers, val_embeddings, test_embeddings = validate_and_process_embeddings(encoder_output)
-    print(f"Available layers for visualisation: {layers}\n")
-
-    class_labels = (
-        encoder_output["val"]["y"].cpu().numpy(),
-        encoder_output["test"]["y"].cpu().numpy()
+    # Process test and val CSVs
+    val_df, test_df = load_csvs_and_add_idx(
+        dataset=dataset
     )
-    val_plot_labels, test_plot_labels = extract_plot_labels(val_df, test_df, class_labels, dataset)
+
+    # Load embeddings and generate them if they don't already exist
+    encoder_output = load_embeddings(
+        encoder_to_evaluate=encoder_to_evaluate, 
+        feat_mode=feat_mode,
+        dataset=dataset, 
+        val_df=val_df, 
+        test_df=test_df
+    )
+
+    # Validate the embeddings output and extract layers, and val/test splits
+    layers, val_embeddings, test_embeddings = validate_and_process_embeddings(
+        encoder_output=encoder_output
+    )
+
+    # Extract plot labels
+    val_plot_labels, test_plot_labels = extract_plot_labels(val_df, test_df, encoder_output, dataset)
 
 
-    ### 4. Generate covariate-shifted test subsets and store their original indices
-    shift_to_indices_dict = {}
-    for shift_name, shift_fn in Config.SHIFT_REGISTRY[dataset].items():
-        print(f"Simulating {shift_name} shift on test data...")
-        df = shift_fn(test_df.copy(), random_state=Config.SEED)
-        if "idx_in_original" not in df.columns:
-            raise ValueError(f"Shift function '{shift_name}' must preserve 'idx_in_original' column.")
-        shift_to_indices_dict[shift_name] = df["idx_in_original"].to_numpy()
+    # Generate covariate-shifted test subsets and store their original indices
+    shift_to_indices_dict = simulate_shifts(dataset, test_df)
 
-
-    ### 5. Generate the embedding plots for each layer of the encoder
-
+    # Generate plots
     for layer in layers:
         print(f"\n--- Processing layer: {layer} ---")
 
@@ -276,12 +316,12 @@ def run_experiment(
                 labels=shifted_labels,
                 shift=shift_name
             )
-            # calculate_bbsd_and_mmd(
-            #     source_distribution=val_embeddings[layer],
-            #     target_distribution=test_embeddings[layer][idx_array],
-            #     layer_name=layer, 
-            #     shift=shift_name
-            # )
+            calculate_bbsd_and_mmd(
+                source_distribution=val_embeddings[layer],
+                target_distribution=test_embeddings[layer][idx_array],
+                layer_name=layer, 
+                shift=shift_name
+            )
 
     visualise_embeddings.plot_shift_comparison_scatter(
         output_dir=output_dir / "shift_comparison",

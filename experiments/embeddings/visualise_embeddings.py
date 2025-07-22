@@ -221,11 +221,11 @@ def plot_shift_comparison_scatter(
         embeddings_pca, embeddings_tsne = calculate_PCA_and_tSNE(cat_embeddings)
 
         df = pd.DataFrame({
+            "Shift": shift_labels,
             "PCA 1": embeddings_pca[:,0],
             "PCA 2": embeddings_pca[:,1],
             "t-SNE 1": embeddings_tsne[:,0],
             "t-SNE 2": embeddings_tsne[:,1],
-            "Shift": shift_labels,
         })
 
         # PCA plot (left column)
@@ -301,11 +301,11 @@ def plot_shift_comparison_joint(
         embeddings_pca, embeddings_tsne = calculate_PCA_and_tSNE(cat_embeddings)
 
         df = pd.DataFrame({
+            "Shift": shift_labels,
             "PCA 1": embeddings_pca[:, 0],
             "PCA 2": embeddings_pca[:, 1],
             "t-SNE 1": embeddings_tsne[:, 0],
             "t-SNE 2": embeddings_tsne[:, 1],
-            "Shift": shift_labels,
         })
 
         # Create PCA jointplot
