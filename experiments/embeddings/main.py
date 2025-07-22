@@ -42,9 +42,9 @@ ENCODER_TO_EVALUATE = "imagenet" # Options: "imagenet", "simclr_imagenet", or "r
 FEAT_MODE = "all" # Options: "final", "early", or "all"
 DATASET = "Mammo" # Options: "Mammo", "Retina", "RSNA", or "PadChest"
 
-# ------------------------------------
+# --------------
 # Main execution
-# ------------------------------------
+# --------------
 if __name__ == "__main__":
 
     # Optional: Configure global settings using CLI

@@ -28,7 +28,7 @@ import visualise_embeddings
 # --------------------------------------------------------
 # Generate val and test csvs into dfs and add index column
 # --------------------------------------------------------
-def load_csvs_and_add_idx(
+def load_csvs_and_add_idx_column(
         dataset: str
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
 
@@ -110,7 +110,6 @@ def extract_plot_labels(
             test_plot_labels (dict[str, np.ndarray]): A dictionary mapping label names to NumPy arrays 
                                                     of labels extracted from the "test" dataset.
     """
-
 
     val_plot_labels = {}
     test_plot_labels = {}
@@ -242,7 +241,7 @@ def run_experiment(
     print(f"\n=== {dataset.upper()} | {encoder_to_evaluate.upper()} | {feat_mode.upper()} ===\n")
 
     # Process test and val CSVs
-    val_df, test_df = load_csvs_and_add_idx(
+    val_df, test_df = load_csvs_and_add_idx_column(
         dataset=dataset
     )
 
