@@ -51,15 +51,16 @@ def concat_embeddings(
 
 def save_fig(
         fig: Figure, 
-        file_location: Path
+        file_location: Path,
+        file_name: str
     ) -> None:
     """
     Create dirs, save, close and print once.
     """
     file_location.mkdir(parents=True, exist_ok=True)
-    fig.savefig(file_location, bbox_inches="tight")
+    fig.savefig(file_location / file_name, bbox_inches="tight")
     plt.close(fig)
-    print(f"[Saved] {file_location}")
+    print(f"[Saved] {file_name}")
 
 
 # -------------
@@ -180,7 +181,7 @@ def plot_layer_representation_scatter(
 
     fig.suptitle(f"{dataset} | Scenario: {shift} - {layer_name}", fontsize=16)
 
-    save_fig(fig, output_dir / f"{shift}_{layer_name}_{encoder_to_evaluate}.png")
+    save_fig(fig, output_dir, f"{shift}_{layer_name}_{encoder_to_evaluate}.png")
 
 
 def plot_shift_comparison_scatter(
@@ -261,7 +262,7 @@ def plot_shift_comparison_scatter(
 
     fig.suptitle(f"{dataset} | Shift Comparisons for All Layers of {encoder_to_evaluate} Encoder Using PCA and t-SNE Analysis", fontsize=16)
 
-    save_fig(fig, output_dir / f"{dataset}_{encoder_to_evaluate}_shift_comparison_scatterplots.png")
+    save_fig(fig, output_dir, f"{dataset}_{encoder_to_evaluate}_shift_comparison_scatterplots.png")
 
 
 def plot_shift_comparison_joint(
@@ -332,7 +333,7 @@ def plot_shift_comparison_joint(
         g_pca.figure.tight_layout()
         g_pca.figure.subplots_adjust(top=0.9, right=0.8)
 
-        save_fig(g_pca.figure, output_dir / f"{dataset}_{encoder_to_evaluate}_{layer}_PCA_jointplot.png")
+        save_fig(g_pca.figure, output_dir, f"{dataset}_{encoder_to_evaluate}_{layer}_PCA_jointplot.png")
 
         # Create t-SNE jointplot
         g_tsne = sns.jointplot(
@@ -355,4 +356,4 @@ def plot_shift_comparison_joint(
         g_tsne.figure.tight_layout()
         g_tsne.figure.subplots_adjust(top=0.9, right=0.8)
 
-        save_fig(g_tsne.figure, output_dir / f"{dataset}_{encoder_to_evaluate}_{layer}_tSNE_jointplot.png")
+        save_fig(g_tsne.figure, output_dir, f"{dataset}_{encoder_to_evaluate}_{layer}_tSNE_jointplot.png")
