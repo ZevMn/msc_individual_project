@@ -52,7 +52,6 @@ class PlotInputs:
             integer indices corresponding to the subset of test embeddings belonging to
             that covariate shift.
     """
-
     encoder_to_evaluate: str
     dataset: str
     layers: list[str]
@@ -229,7 +228,6 @@ def plot_layer_representation_scatter(
         pca_components: The number of principal components to reduce to.
         num_samples: Maximum number of points to include in the plot.
     """
-
     set_plot_style()
 
     columns = Config.DATASET_CONFIG[dataset]["plot_columns"]
@@ -312,7 +310,6 @@ def plot_all_layers_scatter_labelled(
         test_labels: Dict of label arrays (same length as test embeddings).
         run_statistical_tests: If True, BBSD and MMD tests are executed.
     """
-
     for layer in inputs.layers:
         print(f"\n--- Processing layer: {layer} ---")
 
@@ -366,7 +363,6 @@ def plot_shift_comparison_scatter(
         output_dir: Directory where the plot PNGs will be saved.
         inputs: A 'PlotInputs' instance.
     """
-
     set_plot_style()
 
     fig, axes = plt.subplots(
@@ -449,7 +445,6 @@ def plot_shift_comparison_joint(output_dir: Path, inputs: PlotInputs) -> None:
         output_dir: Directory where the plot PNGs will be saved.
         inputs: A 'PlotInputs' instance.
     """
-
     set_plot_style()
 
     for layer in inputs.layers:

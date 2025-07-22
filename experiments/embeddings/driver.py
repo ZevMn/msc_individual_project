@@ -44,7 +44,11 @@ def load_csvs_and_add_idx_column(dataset: str) -> tuple[pd.DataFrame, pd.DataFra
 # If embeddings do not exist, generate them
 # -----------------------------------------
 def generate_and_load_embeddings(
-    encoder_to_evaluate, feat_mode, dataset, val_df, test_df
+    encoder_to_evaluate: str, 
+    feat_mode: str, 
+    dataset: str, 
+    val_df: pd.DataFrame, 
+    test_df: pd.DataFrame
 ) -> dict[str, dict[str, torch.Tensor]]:
 
     encoder_pickle_path = (
@@ -117,7 +121,6 @@ def extract_plot_labels(
             test_plot_labels (dict[str, np.ndarray]): A dictionary mapping label names to NumPy arrays
                                                     of labels extracted from the "test" dataset.
     """
-
     val_plot_labels = {}
     test_plot_labels = {}
 

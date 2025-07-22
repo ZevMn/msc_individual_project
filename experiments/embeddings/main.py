@@ -54,9 +54,15 @@ if __name__ == "__main__":
         default=ENCODER_TO_EVALUATE,
         choices=list(Config.ENCODERS.keys()),
     )
-    parser.add_argument("--feat_mode", default=FEAT_MODE, choices=Config.FEAT_MODES)
     parser.add_argument(
-        "--dataset", default=DATASET, choices=list(Config.DATASET_CONFIG.keys())
+        "--feat_mode", 
+        default=FEAT_MODE, 
+        choices=Config.FEAT_MODES
+    )
+    parser.add_argument(
+        "--dataset", 
+        default=DATASET, 
+        choices=list(Config.DATASET_CONFIG.keys())
     )
     args = parser.parse_args()
 
