@@ -280,7 +280,7 @@ def run_experiment(
         shift_to_indices_dict=shift_to_indices_dict,
     )
 
-    visualise_embeddings.plot_labelled_scatter_for_all_layers(
+    visualise_embeddings.plot_all_layers_scatter_labelled(
         output_dir=output_dir / "layer_representation",
         inputs=inputs,
         val_labels=val_labels,

@@ -26,7 +26,6 @@ class PlotConfig:
     MARKER_SIZE = 40
     COLOR_PALETTE = 'tab10'
     FIGURE_SIZE = (14, 18)
-    PCA_COMPONENTS = 2
 
 class Config:
     ROOT = Path(__file__).resolve().parent.parent.parent
