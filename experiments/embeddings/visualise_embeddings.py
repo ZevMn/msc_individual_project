@@ -49,23 +49,6 @@ def concat_embeddings(
     return torch.cat(cat_embeddings), shift_labels
 
 
-def save_fig(
-        fig: Figure, 
-        file_location: Path,
-        file_name: str
-    ) -> None:
-    """
-    Create dirs, save, close and print once.
-    """
-    file_location.mkdir(parents=True, exist_ok=True)
-    fig.savefig(file_location / file_name, bbox_inches="tight")
-    plt.close(fig)
-    print(f"[Saved] {file_name}")
-
-
-# -------------
-# PCA and t-SNE
-# -------------
 def calculate_PCA_and_tSNE(
         embeddings: torch.Tensor,
         seed: int=Config.SEED, 
@@ -97,7 +80,20 @@ def calculate_PCA_and_tSNE(
     print(f"t-SNE shape: {embeddings_tsne.shape}")
 
     return embeddings_pca, embeddings_tsne
-     
+
+
+def save_fig(
+        fig: Figure, 
+        file_location: Path,
+        file_name: str
+    ) -> None:
+    """
+    Create dirs, save, close and print once.
+    """
+    file_location.mkdir(parents=True, exist_ok=True)
+    fig.savefig(file_location / file_name, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[Saved] {file_name}")
 
 
 # ------------------

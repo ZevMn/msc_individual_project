@@ -184,7 +184,7 @@ def run_experiment(
     encoder_pickle_path =  path_to_dataset / Config.ENCODERS[encoder_to_evaluate]
     output_dir = path_to_dataset / "Plots" / encoder_to_evaluate
 
-    print(f"\n=== {dataset.upper()} | {encoder_to_evaluate.upper()} | {feat_mode.upper()} ===")
+    print(f"\n=== {dataset.upper()} | {encoder_to_evaluate.upper()} | {feat_mode.upper()} ===\n")
 
     ### 1. Process test and val CSVs
 
@@ -227,7 +227,7 @@ def run_experiment(
     encoder_output = load_embeddings(encoder_pickle_path)
 
     layers, val_embeddings, test_embeddings = validate_and_process_embeddings(encoder_output)
-    print(f"Available layers for visualisation: {layers}")
+    print(f"Available layers for visualisation: {layers}\n")
 
     class_labels = (
         encoder_output["val"]["y"].cpu().numpy(),
