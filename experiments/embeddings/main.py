@@ -38,9 +38,9 @@ from config import Config
 from driver import run_experiment
 
 # --------- Defaults ----------
-ENCODER_TO_EVALUATE = "imagenet" # Options: "imagenet", "simclr_imagenet", or "random"
-FEAT_MODE = "all" # Options: "final", "early", or "all"
-DATASET = "Mammo" # Options: "Mammo", "Retina", "RSNA", or "PadChest"
+ENCODER_TO_EVALUATE = "imagenet"  # Options: "imagenet", "simclr_imagenet", or "random"
+FEAT_MODE = "all"  # Options: "final", "early", or "all"
+DATASET = "Mammo"  # Options: "Mammo", "Retina", "RSNA", or "PadChest"
 
 # --------------
 # Main execution
@@ -49,15 +49,15 @@ if __name__ == "__main__":
 
     # Optional: Configure global settings using CLI
     parser = argparse.ArgumentParser()
-    parser.add_argument("--encoder_to_evaluate", 
-                        default=ENCODER_TO_EVALUATE,
-                        choices=list(Config.ENCODERS.keys()))
-    parser.add_argument("--feat_mode", 
-                        default=FEAT_MODE,
-                        choices=Config.FEAT_MODES)
-    parser.add_argument("--dataset", 
-                        default=DATASET,
-                        choices=list(Config.DATASET_CONFIG.keys()))
+    parser.add_argument(
+        "--encoder_to_evaluate",
+        default=ENCODER_TO_EVALUATE,
+        choices=list(Config.ENCODERS.keys()),
+    )
+    parser.add_argument("--feat_mode", default=FEAT_MODE, choices=Config.FEAT_MODES)
+    parser.add_argument(
+        "--dataset", default=DATASET, choices=list(Config.DATASET_CONFIG.keys())
+    )
     args = parser.parse_args()
 
     run_experiment(args.encoder_to_evaluate, args.feat_mode, args.dataset)

@@ -11,26 +11,21 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
+import visualise_embeddings
+from config import Config
+from embeddings_io import load_embeddings_pkl
 from torch.utils.data import DataLoader
-
-from experiments.inference_utils import get_or_save_outputs
 
 from data_handling.mammo import EmbedDataset
 from data_handling.retina import RetinaDataset
-from data_handling.xray import RNSAPneumoniaDetectionDataset, PadChestDataset
+from data_handling.xray import PadChestDataset, RNSAPneumoniaDetectionDataset
+from experiments.inference_utils import get_or_save_outputs
 
-from config import Config
-
-from embeddings_io import load_embeddings_pkl
-
-import visualise_embeddings
 
 # --------------------------------------------------------
 # Generate val and test csvs into dfs and add index column
 # --------------------------------------------------------
-def load_csvs_and_add_idx_column(
-        dataset: str
-    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+def load_csvs_and_add_idx_column(dataset: str) -> tuple[pd.DataFrame, pd.DataFrame]:
 
     val_csv, test_csv = Config.DATASET_CONFIG[dataset]["csv_files"]
 
@@ -49,14 +44,16 @@ def load_csvs_and_add_idx_column(
 # If embeddings do not exist, generate them
 # -----------------------------------------
 def generate_and_load_embeddings(
-        encoder_to_evaluate,
-        feat_mode,
-        dataset,
-        val_df, 
-        test_df
-    ) -> dict[str, dict[str, torch.Tensor]]:
+    encoder_to_evaluate, feat_mode, dataset, val_df, test_df
+) -> dict[str, dict[str, torch.Tensor]]:
 
-    encoder_pickle_path =  Config.ROOT / "experiments" / "outputs"/ dataset / Config.ENCODERS[encoder_to_evaluate]
+    encoder_pickle_path = (
+        Config.ROOT
+        / "experiments"
+        / "outputs"
+        / dataset
+        / Config.ENCODERS[encoder_to_evaluate]
+    )
 
     if not Path.exists(encoder_pickle_path):
 
@@ -67,17 +64,27 @@ def generate_and_load_embeddings(
         get_or_save_outputs(
             model_to_evaluate=None,
             encoder_to_evaluate=encoder_to_evaluate,
-            val_loader=DataLoader(val_preprocessed, batch_size=Config.BATCH_SIZE, shuffle=False, num_workers=Config.NUM_WORKERS),
-            test_loader=DataLoader(test_preprocessed, batch_size=Config.BATCH_SIZE, shuffle=False, num_workers=Config.NUM_WORKERS),
+            val_loader=DataLoader(
+                val_preprocessed,
+                batch_size=Config.BATCH_SIZE,
+                shuffle=False,
+                num_workers=Config.NUM_WORKERS,
+            ),
+            test_loader=DataLoader(
+                test_preprocessed,
+                batch_size=Config.BATCH_SIZE,
+                shuffle=False,
+                num_workers=Config.NUM_WORKERS,
+            ),
             dataset_name=dataset,
-            feat_mode=feat_mode
+            feat_mode=feat_mode,
         )
 
         # Cleanup
         torch.cuda.empty_cache()
 
     print(f"Loading encoder output from {encoder_pickle_path}...")
-    
+
     return load_embeddings_pkl(encoder_pickle_path)
 
 
@@ -85,29 +92,29 @@ def generate_and_load_embeddings(
 # Generate dicts of {label names: feature labels to be plotted}
 # -------------------------------------------------------------
 def extract_plot_labels(
-        val_df: pd.DataFrame, 
-        test_df: pd.DataFrame, 
-        encoder_output: dict[str, dict[str, torch.Tensor]],
-        dataset: str
-    ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
+    val_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    encoder_output: dict[str, dict[str, torch.Tensor]],
+    dataset: str,
+) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
     """
-    Build two ordered dicts mapping each label category to the corresponding NumPy array 
-    of labels extracted from the val and test datasets for plotting. The order follows 
+    Build two ordered dicts mapping each label category to the corresponding NumPy array
+    of labels extracted from the val and test datasets for plotting. The order follows
     Config.DATASET_CONFIG[dataset]["plot_columns"].
 
     Args:
         val_df (pd.DataFrame): Dataframe for the "val" dataset.
         test_df (pd.DataFrame): Dataframe for the "test" dataset.
-        class_labels (tuple[np.ndarray, np.ndarray]): A tuple of NumPy arrays containing the 
+        class_labels (tuple[np.ndarray, np.ndarray]): A tuple of NumPy arrays containing the
                                                     class labels for the "val" and the "test" set.
-        dataset (str): The name of the dataset (e.g., "Mammo", "Retina", etc.), used to look up 
+        dataset (str): The name of the dataset (e.g., "Mammo", "Retina", etc.), used to look up
                     the column mapping and plotting order from the configuration.
 
     Returns:
         tuple:
-            val_plot_labels (dict[str, np.ndarray]): A dictionary mapping label names to NumPy arrays 
+            val_plot_labels (dict[str, np.ndarray]): A dictionary mapping label names to NumPy arrays
                                                     of labels extracted from the "val" dataset.
-            test_plot_labels (dict[str, np.ndarray]): A dictionary mapping label names to NumPy arrays 
+            test_plot_labels (dict[str, np.ndarray]): A dictionary mapping label names to NumPy arrays
                                                     of labels extracted from the "test" dataset.
     """
 
@@ -128,17 +135,14 @@ def extract_plot_labels(
 
         if col_name not in val_df.columns or col_name not in test_df.columns:
             raise KeyError(f"Column '{col_name}' not found in the supplied DataFrames.")
-        
+
         val_plot_labels[label] = val_df[col_name].to_numpy()
         test_plot_labels[label] = test_df[col_name].to_numpy()
 
     return val_plot_labels, test_plot_labels
 
 
-def simulate_shifts(
-        dataset: str, 
-        test_df: pd.DataFrame
-    ) -> dict[str, np.ndarray]:
+def simulate_shifts(dataset: str, test_df: pd.DataFrame) -> dict[str, np.ndarray]:
 
     shift_to_indices_dict = {}
 
@@ -147,8 +151,10 @@ def simulate_shifts(
         df = shift_fn(test_df.copy(), random_state=Config.SEED)
 
         if "idx_in_original" not in df.columns:
-            raise ValueError(f"Shift function '{shift_name}' must preserve 'idx_in_original' column.")
-        
+            raise ValueError(
+                f"Shift function '{shift_name}' must preserve 'idx_in_original' column."
+            )
+
         shift_to_indices_dict[shift_name] = df["idx_in_original"].to_numpy()
 
     return shift_to_indices_dict
@@ -158,29 +164,33 @@ def simulate_shifts(
 # Wrapper to apply correct dataset function
 # -----------------------------------------
 def preprocess_data(dataset, val_df, test_df):
-        if dataset == "Mammo":
-            DS = EmbedDataset
-        elif dataset == "Retina":
-            DS = RetinaDataset
-        elif dataset == "RSNA":
-            DS = RNSAPneumoniaDetectionDataset
-        elif dataset == "PadChest":
-            DS = PadChestDataset
-        else:
-            raise ValueError(f"Dataset not recognised. Expected: {Config.DATASET_CONFIG.keys()}")
-        
-        return DS(df=val_df, transform=torch.nn.Identity(), cache=False), DS(df=test_df, transform=torch.nn.Identity(), cache=False)
+    if dataset == "Mammo":
+        DS = EmbedDataset
+    elif dataset == "Retina":
+        DS = RetinaDataset
+    elif dataset == "RSNA":
+        DS = RNSAPneumoniaDetectionDataset
+    elif dataset == "PadChest":
+        DS = PadChestDataset
+    else:
+        raise ValueError(
+            f"Dataset not recognised. Expected: {Config.DATASET_CONFIG.keys()}"
+        )
+
+    return DS(df=val_df, transform=torch.nn.Identity(), cache=False), DS(
+        df=test_df, transform=torch.nn.Identity(), cache=False
+    )
 
 
 # -----------------------------------
 # Validate and process encoder output
 # -----------------------------------
 def validate_and_process_embeddings(
-        encoder_output: dict[str, dict[str, torch.Tensor]], 
-    ) -> tuple[list[str], dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+    encoder_output: dict[str, dict[str, torch.Tensor]],
+) -> tuple[list[str], dict[str, torch.Tensor], dict[str, torch.Tensor]]:
     """
-    Given a mapping of split ("val", "test") to a mapping of layer names to encoder outputs 
-    as well as "y" to class labels, returns a list of layer names 
+    Given a mapping of split ("val", "test") to a mapping of layer names to encoder outputs
+    as well as "y" to class labels, returns a list of layer names
     and separate embeddings mappings for the "val" and "test" splits.
 
     Determines whether the data matches one of three expected cases:
@@ -203,18 +213,24 @@ def validate_and_process_embeddings(
 
     expected_splits = {"val", "test"}
     if set(encoder_output) != expected_splits:
-        raise ValueError(f"Encoder outputs must have keys {expected_splits}, found {set(encoder_output)}")
-    
+        raise ValueError(
+            f"Encoder outputs must have keys {expected_splits}, found {set(encoder_output)}"
+        )
+
     for split, embeddings_mapping in encoder_output.items():
         if not embeddings_mapping:
-            raise ValueError(f"No data in split '{split}'. Expected embeddings and labels.")
-        
+            raise ValueError(
+                f"No data in split '{split}'. Expected embeddings and labels."
+            )
+
         keys = set(embeddings_mapping)
         if keys == {"y"}:
             raise ValueError(f"No embeddings in split '{split}'. Found only labels.")
         if "y" not in keys:
-            raise ValueError(f"No labels in split '{split}'. Expected a 'y' key for labels.")
-        
+            raise ValueError(
+                f"No labels in split '{split}'. Expected a 'y' key for labels."
+            )
+
     layers = [k for k in encoder_output["val"].keys() if k != "y"]
     val_embeddings = {k: v for k, v in encoder_output["val"].items() if k != "y"}
     test_embeddings = {k: v for k, v in encoder_output["test"].items() if k != "y"}
@@ -227,31 +243,34 @@ def validate_and_process_embeddings(
 # ------------------------
 # Called in main execution
 # ------------------------
-def run_experiment(
-        encoder_to_evaluate: str,
-        feat_mode: str,
-        dataset: str
-    ) -> None:
+def run_experiment(encoder_to_evaluate: str, feat_mode: str, dataset: str) -> None:
 
     Config.validate()
     Config.set_seeds()
 
-    output_dir = Config.ROOT / "experiments" / "outputs"/ dataset / "Plots" / encoder_to_evaluate
+    output_dir = (
+        Config.ROOT
+        / "experiments"
+        / "outputs"
+        / dataset
+        / "Plots"
+        / encoder_to_evaluate
+    )
 
-    print(f"\n=== {dataset.upper()} | {encoder_to_evaluate.upper()} | {feat_mode.upper()} ===\n")
+    print(
+        f"\n=== {dataset.upper()} | {encoder_to_evaluate.upper()} | {feat_mode.upper()} ===\n"
+    )
 
     # Process test and val CSVs
-    val_df, test_df = load_csvs_and_add_idx_column(
-        dataset=dataset
-    )
+    val_df, test_df = load_csvs_and_add_idx_column(dataset=dataset)
 
     # Load embeddings and generate them if they don't already exist
     encoder_output = generate_and_load_embeddings(
-        encoder_to_evaluate=encoder_to_evaluate, 
+        encoder_to_evaluate=encoder_to_evaluate,
         feat_mode=feat_mode,
-        dataset=dataset, 
-        val_df=val_df, 
-        test_df=test_df
+        dataset=dataset,
+        val_df=val_df,
+        test_df=test_df,
     )
 
     # Validate the embeddings output and extract layers, and val/test splits
@@ -261,19 +280,13 @@ def run_experiment(
 
     # Extract plot labels
     val_labels, test_labels = extract_plot_labels(
-        val_df=val_df, 
-        test_df=test_df, 
-        encoder_output=encoder_output, 
-        dataset=dataset
+        val_df=val_df, test_df=test_df, encoder_output=encoder_output, dataset=dataset
     )
 
     # Generate covariate-shifted test subsets and store their original indices
-    shift_to_indices_dict = simulate_shifts(
-        dataset=dataset, 
-        test_df=test_df
-    )
+    shift_to_indices_dict = simulate_shifts(dataset=dataset, test_df=test_df)
 
-    # Generate plots 
+    # Generate plots
     inputs = visualise_embeddings.PlotInputs(
         encoder_to_evaluate=encoder_to_evaluate,
         dataset=dataset,
@@ -291,12 +304,10 @@ def run_experiment(
         run_statistical_tests=False,
     )
     visualise_embeddings.plot_shift_comparison_scatter(
-        output_dir=output_dir / "shift_comparison",
-        inputs=inputs
+        output_dir=output_dir / "shift_comparison", inputs=inputs
     )
     visualise_embeddings.plot_shift_comparison_joint(
-        output_dir=output_dir / "shift_comparison",
-        inputs=inputs
+        output_dir=output_dir / "shift_comparison", inputs=inputs
     )
 
     print(f"\n=== VISUALIZATION COMPLETE ===")
