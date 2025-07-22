@@ -154,7 +154,7 @@ def aggregate_features_and_plot_shift_comparison(
 ) -> None:
     """
     Aggregates features from reference dataset and shifted datasets and plots 
-    then plots PCA and t-SNE visualisations to compare how the feature spaces and
+    PCA and t-SNE scatter-plots and density-plots to compare how the feature spaces and
     learnt representations differ between different layers of the encoder.
 
     Args:
@@ -208,6 +208,17 @@ def aggregate_features_and_plot_shift_comparison(
             palette=PlotConfig.COLOR_PALETTE, 
             ax=axes[i, 0])
         ax_pca.set_title(f"PCA Shift Comparison for {layer}")
+        
+        # PCA density plot (overlay)
+        sns.kdeplot(
+            data=df, 
+            x="PCA 1", 
+            y="PCA 2", 
+            hue="Shift", 
+            fill=True, 
+            alpha=0.3, 
+            palette=PlotConfig.COLOR_PALETTE, 
+            ax=axes[i, 0])
 
         # t-SNE plot (right column)
         ax_tsne = sns.scatterplot(
@@ -221,10 +232,21 @@ def aggregate_features_and_plot_shift_comparison(
             ax=axes[i, 1])
         ax_tsne.set_title(f"t-SNE Shift Comparison for {layer}")
 
+        # t-SNE density plot (overlay)
+        sns.kdeplot(
+            data=df, 
+            x="t-SNE 1", 
+            y="t-SNE 2", 
+            hue="Shift", 
+            fill=True, 
+            alpha=0.3, 
+            palette=PlotConfig.COLOR_PALETTE, 
+            ax=axes[i, 1])
+
     for ax in axes.ravel():
         sns.move_legend(ax, loc="upper left", bbox_to_anchor=(1,1))
 
-    fig.suptitle(f"{dataset} | Shift Comparisons for all layers of {encoder_to_evaluate} encoder using PCA and t-SNE analysis", fontsize=16)
+    fig.suptitle(f"{dataset} | Shift Comparisons for All Layers of {encoder_to_evaluate} Encoder Using PCA and t-SNE Analysis", fontsize=16)
 
     # Save the figure
     output_dir.mkdir(parents=True, exist_ok=True)

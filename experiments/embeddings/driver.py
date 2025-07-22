@@ -275,12 +275,12 @@ def run_experiment(
                 labels=shifted_labels,
                 shift=shift_name
             )
-            calculate_bbsd_and_mmd(
-                source_distribution=val_embeddings[layer],
-                target_distribution=test_embeddings[layer][idx_array],
-                layer_name=layer, 
-                shift=shift_name
-            )
+            # calculate_bbsd_and_mmd(
+            #     source_distribution=val_embeddings[layer],
+            #     target_distribution=test_embeddings[layer][idx_array],
+            #     layer_name=layer, 
+            #     shift=shift_name
+            # )
 
     aggregate_features_and_plot_shift_comparison(
         output_dir=output_dir / "shift_comparison",
