@@ -59,7 +59,11 @@ class Config:
     NUM_WORKERS = 6
 
     # ---------- Config maps -------------
-    FEAT_MODES: list[str] = ["final", "early", "all"]
+    FEAT_MODES_MAP: dict[str, set] = {
+        "final": {"final_layer"},
+        "early": {"layer_1", "final_layer"},
+        "all": {"after_maxpool", "layer_1", "layer_2", "layer_3", "final_layer"}
+    }
 
     ENCODERS: dict[str, str] = {
         "imagenet": "encoder_imagenet.pkl",

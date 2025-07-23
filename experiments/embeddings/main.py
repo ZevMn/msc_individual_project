@@ -14,7 +14,7 @@ The pipeline:
 
 Command-line arguments (all optional - fall back to in-file defaults):
     --encoder_to_evaluate   Encoder identifier: keys of 'Config.ENCODERS'.
-    --feat_mode             Feature mode: One of 'final', 'early', 'all'.
+    --feat_mode             Feature mode: keys of 'Config.FEAT_MODES_MAP'.
     --dataset               Dataset name: keys of 'Config.DATASET_CONFIG'.
 
 Note: If you change 'feat_mode' after embeddings have already been saved, delete 
@@ -54,15 +54,9 @@ if __name__ == "__main__":
         default=ENCODER_TO_EVALUATE,
         choices=list(Config.ENCODERS.keys()),
     )
+    parser.add_argument("--feat_mode", default=FEAT_MODE, choices=Config.FEAT_MODES_MAP.keys())
     parser.add_argument(
-        "--feat_mode", 
-        default=FEAT_MODE, 
-        choices=Config.FEAT_MODES
-    )
-    parser.add_argument(
-        "--dataset", 
-        default=DATASET, 
-        choices=list(Config.DATASET_CONFIG.keys())
+        "--dataset", default=DATASET, choices=list(Config.DATASET_CONFIG.keys())
     )
     args = parser.parse_args()
 

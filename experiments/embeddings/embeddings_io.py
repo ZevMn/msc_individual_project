@@ -13,7 +13,7 @@ import torch
 # -----------------------------------
 def load_embeddings_pkl(file_path: Path) -> dict[str, dict[str, torch.Tensor]]:
     """
-    Load a pickled file containing a mapping of "train" and "test" splits
+    Load a pickled file containing a mapping of val and test splits
     to the corresponding embeddings, grouped by layer of the encoder.
 
     Raises:

@@ -109,8 +109,8 @@ def extract_plot_labels(
     Args:
         val_df (pd.DataFrame): Dataframe for the "val" dataset.
         test_df (pd.DataFrame): Dataframe for the "test" dataset.
-        class_labels (tuple[np.ndarray, np.ndarray]): A tuple of NumPy arrays containing the
-                                                    class labels for the "val" and the "test" set.
+        encoder_output (dict[str, dict[str, torch.Tensor]]): Mapping of "val" and "test" splits 
+        to the corresponding embeddings by layer.
         dataset (str): The name of the dataset (e.g., "Mammo", "Retina", etc.), used to look up
                     the column mapping and plotting order from the configuration.
 
@@ -233,7 +233,7 @@ def validate_and_process_embeddings(
             raise ValueError(
                 f"No labels in split '{split}'. Expected a 'y' key for labels."
             )
-
+        
     layers = [k for k in encoder_output["val"].keys() if k != "y"]
     val_embeddings = {k: v for k, v in encoder_output["val"].items() if k != "y"}
     test_embeddings = {k: v for k, v in encoder_output["test"].items() if k != "y"}
