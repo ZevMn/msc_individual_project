@@ -67,7 +67,7 @@ def run_experiment(encoder_to_evaluate: str, feat_mode: str, dataset: str) -> No
     )
 
     plotting.plot_all_layers_scatter_labelled(
-        output_dir=output_dir / "layer_representation",
+        output_dir=output_dir / "layers_representations",
         inputs=inputs,
         val_labels=val_labels,
         test_labels=test_labels,

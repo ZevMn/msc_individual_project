@@ -284,7 +284,7 @@ def plot_all_layers_scatter_labelled(
         # Reference data (full val dataset)
         print("\nProcessing reference data (no shift)...")
         plot_layer_representation_scatter(
-            output_dir=output_dir / "layers_representations",
+            output_dir=output_dir,
             encoder_to_evaluate=inputs.encoder_to_evaluate,
             dataset=inputs.dataset,
             layer_name=layer,
@@ -298,7 +298,7 @@ def plot_all_layers_scatter_labelled(
             print(f"\nProcessing {shift_name}...")
             shifted_labels = {k: v[idx_array] for k, v in test_labels.items()}
             plot_layer_representation_scatter(
-                output_dir=output_dir / "layers_representations",
+                output_dir=output_dir,
                 encoder_to_evaluate=inputs.encoder_to_evaluate,
                 dataset=inputs.dataset,
                 layer_name=layer,
