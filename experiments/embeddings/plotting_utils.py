@@ -169,7 +169,6 @@ def save_fig(fig: Figure, file_location: Path, file_name: str) -> None:
 # ------------------
 # Plotting functions
 # ------------------
-
 def plot_layer_representation_scatter(
     output_dir: Path,
     encoder_to_evaluate: str,
