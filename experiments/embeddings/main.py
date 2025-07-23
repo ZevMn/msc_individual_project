@@ -34,8 +34,8 @@ Example usage:
 
 import argparse
 
-from config import Config
-from driver import run_experiment
+from experiments.embeddings.config import Config
+from experiments.embeddings.experiment import run_experiment
 
 # --------- Defaults ----------
 ENCODER_TO_EVALUATE = "imagenet"  # Options: "imagenet", "simclr_imagenet", or "random"
