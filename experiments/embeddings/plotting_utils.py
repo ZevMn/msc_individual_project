@@ -592,7 +592,7 @@ def plot_shift_comparison_joint_grid(output_dir: Path, inputs: PlotInputs) -> No
             loc="upper center", 
             ncol=len(labels_legend),
             frameon=False,
-            bbox_to_anchor=(0.8, 0.95),
+            bbox_to_anchor=(0.8, 0.99),
             bbox_transform=fig.transFigure
         )
 
