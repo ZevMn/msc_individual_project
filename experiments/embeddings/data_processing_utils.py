@@ -232,10 +232,10 @@ def extract_plot_labels(
     column_map = Config.DATASET_CONFIG[dataset]["column_map"]
 
     for label in ordered_columns:
-        if label == "class":
+        if label == "Class":
             # Class labels come from the encoder output, not the csv
-            val_plot_labels["class"] = encoder_output["val"]["y"].cpu().numpy()
-            test_plot_labels["class"] = encoder_output["test"]["y"].cpu().numpy()
+            val_plot_labels["Class"] = encoder_output["val"]["y"].cpu().numpy()
+            test_plot_labels["Class"] = encoder_output["test"]["y"].cpu().numpy()
             continue
 
         col_name = column_map[label]

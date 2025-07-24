@@ -86,34 +86,34 @@ class Config:
         "Mammo": {
             "csv_files": ("val_embed.csv", "test_embed.csv"),
             "column_map": {
-                "laterality": "ImageLateralityFinal",
-                "view": "ViewPosition",
-                "manufacturer": "ManufacturerModelName",
+                "Laterality": "ImageLateralityFinal",
+                "View": "ViewPosition",
+                "Manufacturer": "ManufacturerModelName",
             },
-            "plot_columns": ["class", "laterality", "view", "manufacturer"],
+            "plot_columns": ["Class", "Laterality", "View", "Manufacturer"],
         },
         "Retina": {
             "csv_files": ("retina_val.csv", "retina_test.csv"),
-            "column_map": {"site": "site"},
-            "plot_columns": ["class", "site"],
+            "column_map": {"Site": "site"},
+            "plot_columns": ["Class", "Site"],
         },
         "RSNA": {
             "csv_files": ("val_rsna.csv", "test_rsna.csv"),
             "column_map": {
-                "age": "Patient Age",
-                "gender": "Patient Gender",
-                "view": "View Position",
+                "Age": "Patient Age",
+                "Gender": "Patient Gender",
+                "View": "View Position",
             },
-            "plot_columns": ["class", "gender", "view"],
+            "plot_columns": ["Class", "Gender", "View"],
         },
         "PadChest": {
             "csv_files": ("val_padchest.csv", "test_padchest.csv"),
             "column_map": {
-                "age": "PatientAge",
-                "view": "Projection",
-                "manufacturer": "Manufacturer",
+                "Age": "PatientAge",
+                "View": "Projection",
+                "Manufacturer": "Manufacturer",
             },
-            "plot_columns": ["class", "age", "view", "manufacturer"],
+            "plot_columns": ["Class", "Age", "View", "Manufacturer"],
         },
     }
 
