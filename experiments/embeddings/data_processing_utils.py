@@ -55,7 +55,7 @@ def generate_and_load_embeddings(
         / Config.ENCODERS[encoder_to_evaluate]
     )
 
-    if not Path.exists(encoder_pickle_path):
+    if not encoder_pickle_path.exists():
 
         val_preprocessed, test_preprocessed = preprocess_data(dataset, val_df, test_df)
 

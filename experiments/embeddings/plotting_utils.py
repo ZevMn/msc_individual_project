@@ -28,12 +28,12 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import torch
-from config import Config, PlotConfig
 from matplotlib.figure import Figure
 import matplotlib.gridspec as gridspec
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
+from experiments.embeddings.config import Config, PlotConfig
 from experiments.embeddings.statistical_utils import calculate_bbsd_and_mmd
 
 @dataclass
@@ -259,7 +259,12 @@ def plot_layer_representation_scatter(
         ax_tsne.set_title(f"{column.title()} (t-SNE)", fontsize=12)
         ax_tsne.set_xlabel("")
         ax_tsne.set_ylabel("")
-        sns.move_legend(ax_tsne, loc="right", bbox_to_anchor=(1, 1))
+        sns.move_legend(
+            ax_tsne,
+            loc="upper left",
+            bbox_to_anchor=(1.02, 1),
+            frameon=False
+        )
 
     title_and_save_fig(
         f"{dataset} | Scenario: {shift} - {layer_name}", 
@@ -414,10 +419,11 @@ def plot_shift_comparison_scatter(
             handles, 
             labels,
             loc="upper center", 
-            ncol=5,
+            ncol=n_layers,
             bbox_to_anchor=(0.5, 1.05),
             frameon=False
         )
+        fig.tight_layout(pad=2.0)
 
     title_and_save_fig(
         f"Shift Comparison: {inputs.dataset} - {inputs.encoder_to_evaluate}",     
@@ -508,7 +514,7 @@ def plot_shift_comparison_joint_grid(output_dir: Path, inputs: PlotInputs) -> No
     set_plot_style()
 
     n_layers = len(inputs.layers)
-    fig = plt.figure(figsize=PlotConfig.get_figsize(n_layers))
+    fig = plt.figure(figsize=PlotConfig.get_figsize(n_layers, permute=True))
     gs = gridspec.GridSpec(2, n_layers, figure=fig, hspace=0.35, wspace=0.25)
 
     handles_legend, labels_legend = None, None
@@ -573,11 +579,10 @@ def plot_shift_comparison_joint_grid(output_dir: Path, inputs: PlotInputs) -> No
         fig.legend(
             handles_legend, 
             labels_legend,
-            loc="lower center", 
+            loc="upper left", 
             ncol=len(labels_legend),
-            bbox_to_anchor=(0.5, -0.02), 
+            bbox_to_anchor=(1.02, 1), 
             frameon=False, 
-            title="Shift"
         )
 
     title_and_save_fig(

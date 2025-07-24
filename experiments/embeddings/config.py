@@ -27,7 +27,13 @@ class PlotConfig:
     BASE_HEIGHT_PER_ROW = 4
 
     @staticmethod
-    def get_figsize(n_rows: int, n_cols: int=2) -> tuple[int, int]:
+    def get_figsize(
+        n_rows: int, 
+        n_cols: int=2, 
+        permute: bool=False
+    ) -> tuple[int, int]:
+        if permute:
+            n_cols, n_rows = n_rows, n_cols
         return (PlotConfig.BASE_WIDTH * n_cols, PlotConfig.BASE_HEIGHT_PER_ROW * n_rows)
 
 
