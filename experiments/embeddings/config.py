@@ -23,7 +23,12 @@ class PlotConfig:
     ALPHA = 0.8
     MARKER_SIZE = 40
     COLOR_PALETTE = "tab10"
-    FIGURE_SIZE = (14, 18)
+    BASE_WIDTH = 6
+    BASE_HEIGHT_PER_ROW = 4
+
+    @staticmethod
+    def get_figsize(n_rows: int, n_cols: int=2) -> tuple[int, int]:
+        return (PlotConfig.BASE_WIDTH * n_cols, PlotConfig.BASE_HEIGHT_PER_ROW * n_rows)
 
 
 class Config:

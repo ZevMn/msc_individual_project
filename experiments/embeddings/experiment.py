@@ -79,5 +79,9 @@ def run_experiment(encoder_to_evaluate: str, feat_mode: str, dataset: str) -> No
     plotting.plot_shift_comparison_joint(
         output_dir=output_dir / "shift_comparison", inputs=inputs
     )
+    plotting.plot_shift_comparison_joint_grid(
+        output_dir=output_dir / "shift_comparison",
+        inputs=inputs
+    )
 
     print(f"\n=== VISUALIZATION COMPLETE ===")
