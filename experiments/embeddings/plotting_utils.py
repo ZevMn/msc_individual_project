@@ -336,7 +336,7 @@ def plot_all_layer_representations_scatter(
                     layer_name=layer,
                     shift=shift_name,
                 )
-                all_results.append(results)
+                all_results.extend(results)
 
     if run_statistical_tests and all_results:
         save_results(all_results, output_dir)
