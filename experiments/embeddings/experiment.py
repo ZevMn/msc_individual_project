@@ -10,6 +10,7 @@ from experiments.embeddings.config import Config
 from experiments.embeddings import plotting_utils as plotting
 from experiments.embeddings import data_processing_utils as data_processing
 
+
 # ------------------------
 # Called in main execution
 # ------------------------
@@ -44,8 +45,8 @@ def run_experiment(encoder_to_evaluate: str, feat_mode: str, dataset: str) -> No
     )
 
     # Validate the embeddings output and extract layers, and val/test splits
-    layers, val_embeddings, test_embeddings = data_processing.validate_and_process_embeddings(
-        encoder_output=encoder_output
+    layers, val_embeddings, test_embeddings = (
+        data_processing.validate_and_process_embeddings(encoder_output=encoder_output)
     )
 
     # Extract plot labels
@@ -54,7 +55,9 @@ def run_experiment(encoder_to_evaluate: str, feat_mode: str, dataset: str) -> No
     )
 
     # Generate covariate-shifted test subsets and store their original indices
-    shift_to_indices_dict = data_processing.simulate_shifts(dataset=dataset, test_df=test_df)
+    shift_to_indices_dict = data_processing.simulate_shifts(
+        dataset=dataset, test_df=test_df
+    )
 
     # Generate plots
     inputs = plotting.PlotInputs(
@@ -66,22 +69,18 @@ def run_experiment(encoder_to_evaluate: str, feat_mode: str, dataset: str) -> No
         shift_to_indices_dict=shift_to_indices_dict,
     )
 
-    plotting.plot_all_layers_scatter_labelled(
+    plotting.plot_all_layer_representations_scatter(
         output_dir=output_dir / "layers_representations",
         inputs=inputs,
         val_labels=val_labels,
         test_labels=test_labels,
-        run_statistical_tests=False,
+        run_statistical_tests=True,
     )
-    # plotting.plot_shift_comparison_scatter(
-    #     output_dir=output_dir / "shift_comparison", inputs=inputs
-    # )
     plotting.plot_shift_comparison_joint(
         output_dir=output_dir / "shift_comparison", inputs=inputs
     )
-    plotting.plot_shift_comparison_joint_grid(
-        output_dir=output_dir / "shift_comparison",
-        inputs=inputs
+    plotting.plot_shift_comparison_scatter(
+        output_dir=output_dir / "shift_comparison", inputs=inputs
     )
 
     print(f"\n=== VISUALIZATION COMPLETE ===")

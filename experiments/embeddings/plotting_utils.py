@@ -34,7 +34,11 @@ from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
 from experiments.embeddings.config import Config, PlotConfig
-from experiments.embeddings.statistical_utils import calculate_bbsd_and_mmd
+from experiments.embeddings.statistical_utils import (
+    calculate_all_shift_metrics,
+    save_results,
+)
+
 
 @dataclass
 class PlotInputs:
@@ -51,6 +55,7 @@ class PlotInputs:
             integer indices corresponding to the subset of test embeddings belonging to
             that covariate shift.
     """
+
     encoder_to_evaluate: str
     dataset: str
     layers: list[str]
@@ -140,8 +145,11 @@ def calculate_PCA_and_tSNE(
     print(f"PCA explained variance ratio: {pca.explained_variance_ratio_[:2]}")
 
     # Use the t-SNE algorithm on PCA-reduced features to obtain a 2D embedding for input data
+    n_samples = embeddings_np.shape[0]
+    perplexity = min(30, max(1, n_samples // 3))
     embeddings_tsne = TSNE(
         n_components=pca_components,
+        perplexity=perplexity,
         init="random",
         learning_rate="auto",
         random_state=seed,
@@ -152,12 +160,8 @@ def calculate_PCA_and_tSNE(
 
 
 def title_and_save_fig(
-        title: str, 
-        fig: Figure, 
-        file_location: Path, 
-        file_name: str,
-        fontsize: int=16
-    ) -> None:
+    title: str, fig: Figure, file_location: Path, file_name: str, fontsize: int = 16
+) -> None:
     """
     Saves a figure, closes it, and prints a confirmation.
 
@@ -239,7 +243,7 @@ def plot_layer_representation_scatter(
             alpha=PlotConfig.ALPHA,
             s=PlotConfig.MARKER_SIZE,
             ax=axes[i, 0],
-            legend=False
+            legend=False,
         )
         ax_pca.set_title(f"{column.title()} (PCA)", fontsize=12)
         ax_pca.set_xlabel("")
@@ -261,21 +265,18 @@ def plot_layer_representation_scatter(
         ax_tsne.set_xlabel("")
         ax_tsne.set_ylabel("")
         sns.move_legend(
-            ax_tsne,
-            loc="upper left",
-            bbox_to_anchor=(1.02, 1),
-            frameon=False
+            ax_tsne, loc="upper left", bbox_to_anchor=(1.02, 1), frameon=False
         )
 
     title_and_save_fig(
-        f"Feature Representation: {dataset} | {encoder_to_evaluate.title()} | {layer_name.replace('_', ' ').title()} | {shift.replace('_', ' ').title()} Shift", 
-        fig, 
-        output_dir, 
-        f"{dataset}_{encoder_to_evaluate}_{shift}_{layer_name}.png"
+        f"Feature Representation: {dataset} | {encoder_to_evaluate.title()} | {layer_name.replace('_', ' ').title()} | {shift.replace('_', ' ').title()} Shift",
+        fig,
+        output_dir,
+        f"{dataset}_{encoder_to_evaluate}_{layer_name}_{shift}.png",
     )
 
 
-def plot_all_layers_scatter_labelled(
+def plot_all_layer_representations_scatter(
     output_dir: Path,
     inputs: PlotInputs,
     val_labels: dict[str, np.ndarray],
@@ -297,6 +298,8 @@ def plot_all_layers_scatter_labelled(
         test_labels: Dict of label arrays (same length as test embeddings).
         run_statistical_tests: If True, BBSD and MMD tests are executed.
     """
+    all_results = []
+
     for layer in inputs.layers:
         print(f"\n--- Processing layer: {layer} ---")
 
@@ -327,110 +330,16 @@ def plot_all_layers_scatter_labelled(
             )
 
             if run_statistical_tests:
-                calculate_bbsd_and_mmd(
+                results = calculate_all_shift_metrics(
                     source_distribution=inputs.val_embeddings[layer],
                     target_distribution=inputs.test_embeddings[layer][idx_array],
                     layer_name=layer,
                     shift=shift_name,
                 )
+                all_results.append(results)
 
-
-# def plot_shift_comparison_scatter(
-#     output_dir: Path,
-#     inputs: PlotInputs,
-# ) -> None:
-#     """
-#     Compare reference vs shifted distributions across layers with scatter plots.
-
-#     For each layer, validation and shifted subsets are concatenated to share the
-#     same PCA/t-SNE space. Two scatterplots (PCA and t-SNE), coloured by shift type,
-#     are produced per layer.
-
-#     Args:
-#         output_dir: Directory where the plot PNGs will be saved.
-#         inputs: A 'PlotInputs' instance.
-#     """
-#     set_plot_style()
-
-#     n_layers = len(inputs.layers)
-#     fig = plt.figure(figsize=PlotConfig.get_figsize(n_layers), constrained_layout=True)
-#     axes = fig.subplots(n_layers, 2)
-
-#     legend_info = None
-    
-#     for i, layer in enumerate(inputs.layers):
-
-#         # Concatenate the reference features and shifted features
-#         cat_embeddings, shift_labels = concat_embeddings(
-#             val_embeddings_layer=inputs.val_embeddings[layer],
-#             test_embeddings_layer=inputs.test_embeddings[layer],
-#             shift_to_indices_dict=inputs.shift_to_indices_dict,
-#         )
-
-#         # PCA and t-SNE (dimensional reduction)
-#         embeddings_pca, embeddings_tsne = calculate_PCA_and_tSNE(cat_embeddings)
-
-#         df = pd.DataFrame(
-#             {
-#                 "Shift": shift_labels,
-#                 "PCA 1": embeddings_pca[:, 0],
-#                 "PCA 2": embeddings_pca[:, 1],
-#                 "t-SNE 1": embeddings_tsne[:, 0],
-#                 "t-SNE 2": embeddings_tsne[:, 1],
-#             }
-#         )
-
-#         # PCA plot (left column)
-#         ax_pca = sns.scatterplot(
-#             data=df,
-#             x="PCA 1",
-#             y="PCA 2",
-#             hue="Shift",
-#             style="Shift",
-#             alpha=PlotConfig.ALPHA,
-#             s=PlotConfig.MARKER_SIZE,
-#             palette=PlotConfig.COLOR_PALETTE,
-#             ax=axes[i, 0],
-#             legend=False
-#         )
-#         ax_pca.set_title(f"{layer.replace('_', ' ').capitalize()} (PCA)", fontsize=12)
-#         ax_pca.set_xlabel("")
-#         ax_pca.set_ylabel("")
-
-#         # t-SNE plot (right column)
-#         ax_tsne = sns.scatterplot(
-#             data=df,
-#             x="t-SNE 1",
-#             y="t-SNE 2",
-#             hue="Shift",
-#             alpha=PlotConfig.ALPHA,
-#             s=PlotConfig.MARKER_SIZE,
-#             palette=PlotConfig.COLOR_PALETTE,
-#             ax=axes[i, 1],
-#             legend=False
-#         )
-#         ax_tsne.set_title(f"{layer.replace('_', ' ').title()} (t-SNE)", fontsize=12)
-#         ax_tsne.set_xlabel("")
-#         ax_tsne.set_ylabel("")
-#         legend_info = ax_tsne
-
-#     if legend_info is not None:
-#         handles, labels = legend_info.get_legend_handles_labels()
-#         fig.legend(
-#             handles, 
-#             labels,
-#             loc="upper center", 
-#             ncol=n_layers,
-#             bbox_to_anchor=(0.5, 1.05),
-#             frameon=False
-#         )
-
-#     title_and_save_fig(
-#         f"Shift Comparison: {inputs.dataset} | {inputs.encoder_to_evaluate.title()}",
-#         fig,
-#         output_dir,
-#         f"{inputs.dataset}_{inputs.encoder_to_evaluate}_shift_comparison_scatterplots.png",
-#     )
+    if run_statistical_tests and all_results:
+        save_results(all_results, output_dir)
 
 
 def plot_shift_comparison_joint(output_dir: Path, inputs: PlotInputs) -> None:
@@ -474,7 +383,7 @@ def plot_shift_comparison_joint(output_dir: Path, inputs: PlotInputs) -> None:
         for x, y, title_suffix in projections:
             graph = sns.jointplot(
                 data=df,
-                x=x, 
+                x=x,
                 y=y,
                 hue="Shift",
                 kind="scatter",
@@ -485,7 +394,7 @@ def plot_shift_comparison_joint(output_dir: Path, inputs: PlotInputs) -> None:
                 alpha=PlotConfig.ALPHA,
                 s=PlotConfig.MARKER_SIZE,
                 marginal_kws=dict(common_norm=False, fill=True),
-            ) 
+            )
 
             handles, labels = graph.ax_joint.get_legend_handles_labels()
 
@@ -493,10 +402,11 @@ def plot_shift_comparison_joint(output_dir: Path, inputs: PlotInputs) -> None:
                 graph.ax_joint.legend_.remove()
 
             graph.figure.legend(
-                handles, labels,
+                handles,
+                labels,
                 title="Shift",
                 loc="upper right",
-                bbox_to_anchor=(0.98, 0.85),
+                bbox_to_anchor=(1, 0.9),
                 borderaxespad=0.5,
                 frameon=False,
                 fontsize=8,
@@ -507,12 +417,12 @@ def plot_shift_comparison_joint(output_dir: Path, inputs: PlotInputs) -> None:
                 f"Shift Comparison: {inputs.dataset} | {inputs.encoder_to_evaluate.title()} | {layer.replace('_', ' ').title()} | {title_suffix}",
                 graph.figure,
                 output_dir,
-                f"{inputs.dataset}_{inputs.encoder_to_evaluate}_{layer}_{title_suffix}_jointplot.png",
-                fontsize=12
+                f"{inputs.dataset}_{inputs.encoder_to_evaluate}_{layer}_{title_suffix}_joint.png",
+                fontsize=12,
             )
 
 
-def plot_shift_comparison_joint_grid(output_dir: Path, inputs: PlotInputs) -> None:
+def plot_shift_comparison_scatter(output_dir: Path, inputs: PlotInputs) -> None:
     """
     Generate a single figure with a grid of PCA and t-SNE scatterplots per layer
     to compare embedding spaces across layers and shifts.
@@ -534,29 +444,31 @@ def plot_shift_comparison_joint_grid(output_dir: Path, inputs: PlotInputs) -> No
         )
         embeddings_pca, embeddings_tsne = calculate_PCA_and_tSNE(cat_embeddings)
 
-        df = pd.DataFrame({
-            "Shift": shift_labels,
-            "PCA 1": embeddings_pca[:, 0],
-            "PCA 2": embeddings_pca[:, 1],
-            "t-SNE 1": embeddings_tsne[:, 0],
-            "t-SNE 2": embeddings_tsne[:, 1],
-        })
+        df = pd.DataFrame(
+            {
+                "Shift": shift_labels,
+                "PCA 1": embeddings_pca[:, 0],
+                "PCA 2": embeddings_pca[:, 1],
+                "t-SNE 1": embeddings_tsne[:, 0],
+                "t-SNE 2": embeddings_tsne[:, 1],
+            }
+        )
 
         clean_layer = layer.replace("_", " ").title()
 
         # PCA subplot
         ax_pca = fig.add_subplot(gs[0, i])
         sc = sns.scatterplot(
-            data=df, 
-            x="PCA 1", 
-            y="PCA 2", 
-            hue="Shift", 
+            data=df,
+            x="PCA 1",
+            y="PCA 2",
+            hue="Shift",
             style="Shift",
-            palette=PlotConfig.COLOR_PALETTE, 
-            s=PlotConfig.MARKER_SIZE, 
+            palette=PlotConfig.COLOR_PALETTE,
+            s=PlotConfig.MARKER_SIZE,
             alpha=PlotConfig.ALPHA,
             ax=ax_pca,
-            legend="brief"
+            legend="brief",
         )
         ax_pca.set_title(f"{clean_layer} (PCA)", fontsize=11)
         ax_pca.set_xlabel("")
@@ -570,16 +482,16 @@ def plot_shift_comparison_joint_grid(output_dir: Path, inputs: PlotInputs) -> No
         # t-SNE subplot
         ax_tsne = fig.add_subplot(gs[1, i])
         sns.scatterplot(
-            data=df, 
-            x="t-SNE 1", 
-            y="t-SNE 2", 
-            hue="Shift", 
+            data=df,
+            x="t-SNE 1",
+            y="t-SNE 2",
+            hue="Shift",
             style="Shift",
-            palette=PlotConfig.COLOR_PALETTE, 
-            s=PlotConfig.MARKER_SIZE, 
+            palette=PlotConfig.COLOR_PALETTE,
+            s=PlotConfig.MARKER_SIZE,
             alpha=PlotConfig.ALPHA,
             ax=ax_tsne,
-            legend=False
+            legend=False,
         )
         ax_tsne.set_title(f"{clean_layer} (t-SNE)", fontsize=11)
         ax_tsne.set_xlabel("")
@@ -587,18 +499,18 @@ def plot_shift_comparison_joint_grid(output_dir: Path, inputs: PlotInputs) -> No
 
     if handles_legend and labels_legend and len(labels_legend) > 0:
         fig.legend(
-            handles_legend, 
+            handles_legend,
             labels_legend,
-            loc="upper center", 
+            loc="upper center",
             ncol=len(labels_legend),
             frameon=False,
             bbox_to_anchor=(0.8, 0.99),
-            bbox_transform=fig.transFigure
+            bbox_transform=fig.transFigure,
         )
 
     title_and_save_fig(
         f"Shift Comparison: {inputs.dataset} | {inputs.encoder_to_evaluate.title()}",
         fig,
         output_dir,
-        f"{inputs.dataset}_{inputs.encoder_to_evaluate}_shift_jointplot_grid.png"
+        f"{inputs.dataset}_{inputs.encoder_to_evaluate}_shift_comparison_scatter.png",
     )

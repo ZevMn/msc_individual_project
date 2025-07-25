@@ -180,5 +180,6 @@ cluster/*.slurm
 cluster/old_log_files/
 cluster/store_log_files.py
 
-experiments/run_shift_analysis.py
-
+# embeddings testing
+experiments/embeddings/test_embeddings.py
+experiments/embeddings/Test/
