@@ -156,10 +156,21 @@ def calculate_bbsd_and_mmd(
     # MMD (always run)
     combined = np.concatenate([p_np, q_np], axis=0)
     if apply_pca:
-        pca = PCA(n_components=pca_dim)
-        combined_reduced = pca.fit_transform(combined)
-        p_reduced = combined_reduced[: p_np.shape[0]]
-        q_reduced = combined_reduced[p_np.shape[0]:]
+        max_components = min(combined.shape[0], combined.shape[1])
+        n_components = min(pca_dim, max_components)
+
+        if n_components < 2:
+            print(f"[Warning] Skipping PCA (n_components={n_components}) due to insufficient shape: {combined.shape}")
+            p_reduced = p_np
+            q_reduced = q_np
+            combined_reduced = combined
+            apply_pca = False
+        else:
+            pca = PCA(n_components=n_components)
+            combined_reduced = pca.fit_transform(combined)
+            p_reduced = combined_reduced[: p_np.shape[0]]
+            q_reduced = combined_reduced[p_np.shape[0]:]
+            pca_dim = n_components
     else:
         p_reduced = p_np
         q_reduced = q_np

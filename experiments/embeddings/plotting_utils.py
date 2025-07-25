@@ -109,51 +109,53 @@ def concat_embeddings(
 
 def calculate_PCA_and_tSNE(
     embeddings: torch.Tensor,
-    seed: int = Config.SEED,
     pca_components: int = 2,
+    seed: int = Config.SEED,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Project embeddings with PCA and t-SNE.
 
-    The embeddings are first moved to CPU (if necessary) and converted to a
-    NumPy array. PCA is applied to reduce to 2D, and then t-SNE is applied to
-    the PCA output to obtain a 2D embedding.
+    PCA is applied to reduce dimensionality (default 2D), followed by t-SNE
+    on the PCA output to obtain a 2D embedding.
 
     Args:
-        embeddings: Tensor containing the features to reduce.
-        seed: Random seed for reproducibility of PCA and t-SNE.
+        embeddings: Tensor of shape (n_samples, n_features).
+        pca_components: Number of components for PCA (capped to available dims).
+        seed: Random seed for reproducibility.
 
     Returns:
-        A tuple (embeddings_pca, embeddings_tsne) where:
-            embeddings_pca is a NumPy array.
-            embeddings_tsne is a NumPy array.
+        Tuple (embeddings_pca, embeddings_tsne), both np.ndarrays.
     """
-
-    if embeddings.is_cuda:  # Ensure embeddings on CPU (and not GPU)
+    if embeddings.is_cuda:
         embeddings = embeddings.cpu()
 
-    # Convert PyTorch tensor to np.ndarray for processing
     embeddings_np = embeddings.numpy()
-
     if embeddings_np.ndim != 2:
         raise ValueError(f"Expected 2D embeddings, got shape {embeddings_np.shape}")
 
-    # PCA reduction
+    max_components = min(embeddings_np.shape[0], embeddings_np.shape[1])
+    if max_components < 2:
+        raise ValueError(f"Too few samples or features to reduce: shape {embeddings_np.shape}")
+
+    pca_components = min(pca_components, max_components)
     pca = PCA(n_components=pca_components, whiten=False, random_state=seed)
     embeddings_pca = pca.fit_transform(embeddings_np)
-    print(f"PCA shape: {embeddings_pca.shape}")
-    print(f"PCA explained variance ratio: {pca.explained_variance_ratio_[:2]}")
 
-    # Use the t-SNE algorithm on PCA-reduced features to obtain a 2D embedding for input data
+    # Optional: log explained variance
+    print(f"PCA shape: {embeddings_pca.shape}")
+    print(f"PCA explained variance ratio: {pca.explained_variance_ratio_[:min(2, pca_components)]}")
+
+    # t-SNE always outputs 2D for plotting purposes
     n_samples = embeddings_np.shape[0]
-    perplexity = min(30, max(1, n_samples // 3))
+    perplexity = min(30, max(1, (n_samples - 1) // 3))
     embeddings_tsne = TSNE(
-        n_components=pca_components,
+        n_components=2,
         perplexity=perplexity,
         init="random",
         learning_rate="auto",
         random_state=seed,
     ).fit_transform(embeddings_pca)
+
     print(f"t-SNE shape: {embeddings_tsne.shape}")
 
     return embeddings_pca, embeddings_tsne
