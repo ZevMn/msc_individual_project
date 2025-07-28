@@ -144,7 +144,7 @@ def run_stats_experiment(
         / "Stats"
         / encoder_to_evaluate
     )
-    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     print(
         f"\n=== {dataset.upper()} | {encoder_to_evaluate.upper()} | {feat_mode.upper()} ===\n"
@@ -188,7 +188,7 @@ def run_stats_experiment(
 
         # Run MMD for each layer
         for layer in layers:
-            print(f"\n--- Processing layer: {layer} ---")
+            print(f"--- Calculating MMD for layer: {layer} ---")
 
             # Run MMD test
             cat_embeddings = torch.concatenate([
@@ -229,6 +229,7 @@ def run_stats_experiment(
 
 
         # # Run BBSD on softmax outputs - requires task model?
+        # print(f"--- Calculating BBSD on softmax outputs ---")
         # bbsd_sig, bbsd_p = run_bbsd(
         #     probas_val, probas_test[idx_array], return_p_value=True
         # )
