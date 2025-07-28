@@ -11,6 +11,7 @@ from experiments.embeddings import plotting_utils as plotting
 from experiments.embeddings import data_processing_utils as data_processing
 from experiments.embeddings.statistical_utils import calculate_detection_rates
 
+
 # -----------------------------------------
 # First experiment called in main execution
 # -----------------------------------------
@@ -105,6 +106,7 @@ def run_visualisation_experiment(
 # The hypothesis is that different shift types will have different detection rates at different layers.
 # Consider adding other metrics to compare.
 
+
 def run_stats_experiment(
     encoder_to_evaluate: str, feat_mode: str, dataset: str
 ) -> None:
@@ -158,7 +160,7 @@ def run_stats_experiment(
         n_val=n_val,
         val_embeddings=val_embeddings,
         test_embeddings=test_embeddings,
-        shift_to_indices_dict=shift_to_indices_dict
+        shift_to_indices_dict=shift_to_indices_dict,
     )
 
     print(f"\n=== STAT CALCULATIONS COMPLETE ===")

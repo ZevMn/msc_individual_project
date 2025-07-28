@@ -28,9 +28,7 @@ class PlotConfig:
 
     @staticmethod
     def get_figsize(
-        n_rows: int, 
-        n_cols: int=2, 
-        permute: bool=False
+        n_rows: int, n_cols: int = 2, permute: bool = False
     ) -> tuple[int, int]:
         if permute:
             n_cols, n_rows = n_rows, n_cols
@@ -73,7 +71,7 @@ class Config:
     FEAT_MODES_MAP: dict[str, set] = {
         "final": {"final_layer"},
         "early": {"layer_1", "final_layer"},
-        "all": {"after_maxpool", "layer_1", "layer_2", "layer_3", "final_layer"}
+        "all": {"after_maxpool", "layer_1", "layer_2", "layer_3", "final_layer"},
     }
 
     ENCODERS: dict[str, str] = {

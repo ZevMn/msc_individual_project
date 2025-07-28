@@ -135,7 +135,9 @@ def calculate_PCA_and_tSNE(
 
     max_components = min(embeddings_np.shape[0], embeddings_np.shape[1])
     if max_components < 2:
-        raise ValueError(f"Too few samples or features to reduce: shape {embeddings_np.shape}")
+        raise ValueError(
+            f"Too few samples or features to reduce: shape {embeddings_np.shape}"
+        )
 
     pca_components = min(pca_components, max_components)
     pca = PCA(n_components=pca_components, whiten=False, random_state=seed)
@@ -143,7 +145,9 @@ def calculate_PCA_and_tSNE(
 
     # Optional: log explained variance
     print(f"PCA shape: {embeddings_pca.shape}")
-    print(f"PCA explained variance ratio: {pca.explained_variance_ratio_[:min(2, pca_components)]}")
+    print(
+        f"PCA explained variance ratio: {pca.explained_variance_ratio_[:min(2, pca_components)]}"
+    )
 
     # t-SNE always outputs 2D for plotting purposes
     n_samples = embeddings_np.shape[0]
@@ -379,7 +383,7 @@ def plot_shift_comparison_joint(output_dir: Path, inputs: PlotInputs) -> None:
                 "t-SNE 2": embeddings_tsne[:, 1],
             }
         )
-        df = df.sample(frac=1) # Shuffle data for unbiased visualisation
+        df = df.sample(frac=1)  # Shuffle data for unbiased visualisation
 
         projections = [("PCA 1", "PCA 2", "PCA"), ("t-SNE 1", "t-SNE 2", "t-SNE")]
 
@@ -456,7 +460,7 @@ def plot_shift_comparison_scatter(output_dir: Path, inputs: PlotInputs) -> None:
                 "t-SNE 2": embeddings_tsne[:, 1],
             }
         )
-        df = df.sample(frac=1) # Shuffle data for unbiased visualisation
+        df = df.sample(frac=1)  # Shuffle data for unbiased visualisation
 
         clean_layer = layer.replace("_", " ").title()
 

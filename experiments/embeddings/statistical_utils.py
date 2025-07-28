@@ -33,7 +33,7 @@ from sklearn import metrics
 from shift_identification_detection.bbsd_tests import run_bbsd
 from shift_identification_detection.mmd_test import (
     run_mmd_permutation_test,
-    get_mmd_from_all_distances
+    get_mmd_from_all_distances,
 )
 from shift_identification_detection.shift_identification import (
     embed_patient_permutations,
@@ -53,6 +53,7 @@ class ShiftTestResult_old:
         p_value (float | None): The associated p-value, or None if not applicable.
         extra (dict): Additional metadata (e.g., per-dimension stats).
     """
+
     metric: str
     layer: str
     shift_name: str
@@ -61,10 +62,7 @@ class ShiftTestResult_old:
     extra: dict
 
 
-def save_results(
-        results: list[ShiftTestResult_old], 
-        output_dir: Path
-    ) -> None:
+def save_results(results: list[ShiftTestResult_old], output_dir: Path) -> None:
     """
     Save a list of ShiftTestResult objects to disk in JSON and CSV formats.
 
@@ -122,9 +120,8 @@ def calculate_bbsd_and_mmd(
         q_np = np.asarray(target_distribution)
 
     # Check if inputs are softmax probability vectors
-    is_probabilistic = (
-        np.allclose(p_np.sum(axis=1), 1.0, atol=1e-4)
-        and np.allclose(q_np.sum(axis=1), 1.0, atol=1e-4)
+    is_probabilistic = np.allclose(p_np.sum(axis=1), 1.0, atol=1e-4) and np.allclose(
+        q_np.sum(axis=1), 1.0, atol=1e-4
     )
 
     # BBSD (only if probabilistic inputs)
@@ -164,7 +161,9 @@ def calculate_bbsd_and_mmd(
         n_components = min(pca_dim, max_components)
 
         if n_components < 2:
-            print(f"[Warning] Skipping PCA (n_components={n_components}) due to insufficient shape: {combined.shape}")
+            print(
+                f"[Warning] Skipping PCA (n_components={n_components}) due to insufficient shape: {combined.shape}"
+            )
             p_reduced = p_np
             q_reduced = q_np
             combined_reduced = combined
@@ -173,7 +172,7 @@ def calculate_bbsd_and_mmd(
             pca = PCA(n_components=n_components)
             combined_reduced = pca.fit_transform(combined)
             p_reduced = combined_reduced[: p_np.shape[0]]
-            q_reduced = combined_reduced[p_np.shape[0]:]
+            q_reduced = combined_reduced[p_np.shape[0] :]
             pca_dim = n_components
     else:
         p_reduced = p_np
@@ -363,6 +362,7 @@ def calculate_energy_and_kl(
 # Helper: Gather all metrics
 # --------------------------
 
+
 def calculate_all_shift_metrics(
     source_distribution: torch.Tensor | np.ndarray,
     target_distribution: torch.Tensor | np.ndarray,
@@ -388,17 +388,14 @@ def calculate_all_shift_metrics(
         List[ShiftTestResult]: All shift metric results.
     """
     return calculate_bbsd_and_mmd(
-        source_distribution, 
-        target_distribution, 
-        layer_name, 
+        source_distribution,
+        target_distribution,
+        layer_name,
         shift,
-        apply_pca=apply_pca, 
-        pca_dim=pca_dim
+        apply_pca=apply_pca,
+        pca_dim=pca_dim,
     ) + calculate_energy_and_kl(
-        source_distribution, 
-        target_distribution, 
-        layer_name, 
-        shift
+        source_distribution, target_distribution, layer_name, shift
     )
 
 
@@ -407,36 +404,37 @@ class ShiftTestResult:
     """
     Container for storing the result of a statistical test for a shift.
     """
-    shift: str=""
 
-    mp_mmd_pvalue: float=0.0
-    mp_mmd_is_significant: bool=False
+    shift: str = ""
 
-    layer_1_mmd_pvalue: float=0.0
-    layer_1_mmd_is_significant: bool=False
+    mp_mmd_pvalue: float = 0.0
+    mp_mmd_is_significant: bool = False
 
-    layer_2_mmd_pvalue: float=0.0
-    layer_2_mmd_is_significant: bool=False
+    layer_1_mmd_pvalue: float = 0.0
+    layer_1_mmd_is_significant: bool = False
 
-    layer_3_mmd_pvalue: float=0.0
-    layer_3_mmd_is_significant: bool=False
+    layer_2_mmd_pvalue: float = 0.0
+    layer_2_mmd_is_significant: bool = False
 
-    final_layer_mmd_pvalue: float=0.0
-    final_layer_mmd_is_significant: bool=False
+    layer_3_mmd_pvalue: float = 0.0
+    layer_3_mmd_is_significant: bool = False
 
-    bbsd_p_value: float|None = None
+    final_layer_mmd_pvalue: float = 0.0
+    final_layer_mmd_is_significant: bool = False
+
+    bbsd_p_value: float | None = None
     bbsd_is_significant: bool | None = False
 
 
 def calculate_detection_rates(
-        output_dir: Path,
-        dataset: str,
-        encoder_to_evaluate: str,
-        layers: list[str],
-        n_val: int,
-        val_embeddings: dict[str, torch.Tensor],
-        test_embeddings: dict[str, torch.Tensor],
-        shift_to_indices_dict: dict[str, np.ndarray],
+    output_dir: Path,
+    dataset: str,
+    encoder_to_evaluate: str,
+    layers: list[str],
+    n_val: int,
+    val_embeddings: dict[str, torch.Tensor],
+    test_embeddings: dict[str, torch.Tensor],
+    shift_to_indices_dict: dict[str, np.ndarray],
 ):
 
     #######################################
@@ -457,10 +455,9 @@ def calculate_detection_rates(
             print(f"--- Calculating MMD for layer: {layer} ---")
 
             # Run MMD test
-            cat_embeddings = torch.concatenate([
-                val_embeddings[layer],
-                test_embeddings[layer][idx_array]
-            ])
+            cat_embeddings = torch.concatenate(
+                [val_embeddings[layer], test_embeddings[layer][idx_array]]
+            )
             n_components = min(32, cat_embeddings.shape[0], cat_embeddings.shape[1])
             pca = PCA(n_components=n_components)
             embeddings_32pca = pca.fit_transform(cat_embeddings.cpu().numpy())
@@ -492,7 +489,6 @@ def calculate_detection_rates(
                 shift_result.final_layer_mmd_is_significant = sig
             else:
                 raise ValueError(f"Unexpected layer: {layer}")
-
 
         # # Run BBSD on softmax outputs - requires task model?
         # print(f"--- Calculating BBSD on softmax outputs ---")
