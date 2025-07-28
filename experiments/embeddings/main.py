@@ -35,7 +35,10 @@ Example usage:
 import argparse
 
 from experiments.embeddings.config import Config
-from experiments.embeddings.experiment import run_experiment
+from experiments.embeddings.experiments import (
+    run_visualisation_experiment,
+    run_stats_experiment,
+)
 
 # --------- Defaults ----------
 ENCODER_TO_EVALUATE = "imagenet"  # Options: "imagenet", "simclr_imagenet", or "random"
@@ -54,10 +57,16 @@ if __name__ == "__main__":
         default=ENCODER_TO_EVALUATE,
         choices=list(Config.ENCODERS.keys()),
     )
-    parser.add_argument("--feat_mode", default=FEAT_MODE, choices=Config.FEAT_MODES_MAP.keys())
+    parser.add_argument(
+        "--feat_mode", default=FEAT_MODE, choices=Config.FEAT_MODES_MAP.keys()
+    )
     parser.add_argument(
         "--dataset", default=DATASET, choices=list(Config.DATASET_CONFIG.keys())
     )
     args = parser.parse_args()
 
-    run_experiment(args.encoder_to_evaluate, args.feat_mode, args.dataset)
+    # print("\nRunning visualisation experiment:\n")
+    # run_visualisation_experiment(args.encoder_to_evaluate, args.feat_mode, args.dataset)
+
+    print("\nRunning stats experiment:\n")
+    run_stats_experiment(args.encoder_to_evaluate, args.feat_mode, args.dataset)

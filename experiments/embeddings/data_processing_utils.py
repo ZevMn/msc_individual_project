@@ -191,7 +191,7 @@ def validate_and_process_embeddings(
     val_embeddings = {k: v for k, v in encoder_output["val"].items() if k != "y"}
     test_embeddings = {k: v for k, v in encoder_output["test"].items() if k != "y"}
 
-    print(f"Available layers for visualisation: {layers}\n")
+    print(f"Available layers: {layers}\n")
 
     return layers, val_embeddings, test_embeddings
 
