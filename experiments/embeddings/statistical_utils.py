@@ -35,9 +35,13 @@ from shift_identification_detection.mmd_test import (
     run_mmd_permutation_test,
     get_mmd_from_all_distances
 )
+from shift_identification_detection.shift_identification import (
+    embed_patient_permutations,
+)
+
 
 @dataclass
-class ShiftTestResult:
+class ShiftTestResult_old:
     """
     Container for storing the result of a statistical shift test.
 
@@ -58,7 +62,7 @@ class ShiftTestResult:
 
 
 def save_results(
-        results: list[ShiftTestResult], 
+        results: list[ShiftTestResult_old], 
         output_dir: Path
     ) -> None:
     """
@@ -85,7 +89,7 @@ def calculate_bbsd_and_mmd(
     shift: str,
     apply_pca: bool = True,
     pca_dim: int = 32,
-) -> list[ShiftTestResult]:
+) -> list[ShiftTestResult_old]:
     """
     Compute BBSD and MMD statistics between source and target distributions.
 
@@ -104,7 +108,7 @@ def calculate_bbsd_and_mmd(
     Returns:
         List[ShiftTestResult]: Results for BBSD (if applicable) and MMD.
     """
-    results: list[ShiftTestResult] = []
+    results: list[ShiftTestResult_old] = []
 
     # Convert to NumPy
     if isinstance(source_distribution, torch.Tensor):
@@ -139,7 +143,7 @@ def calculate_bbsd_and_mmd(
         pval_bbsd = float(np.min(all_p_values))
 
         results.append(
-            ShiftTestResult(
+            ShiftTestResult_old(
                 metric="BBSD",
                 layer=layer_name,
                 shift_name=shift,
@@ -185,7 +189,7 @@ def calculate_bbsd_and_mmd(
     pval_mmd = float(run_mmd_permutation_test(p_reduced, q_reduced))
 
     results.append(
-        ShiftTestResult(
+        ShiftTestResult_old(
             metric="MMD",
             layer=layer_name,
             shift_name=shift,
@@ -285,7 +289,7 @@ def calculate_energy_and_kl(
     target_distribution: torch.Tensor | np.ndarray,
     layer_name: str,
     shift: str,
-) -> list[ShiftTestResult]:
+) -> list[ShiftTestResult_old]:
     """
     Compute Energy, KL, and Jensen-Shannon divergences between two distributions.
 
@@ -311,12 +315,12 @@ def calculate_energy_and_kl(
     else:
         q_np = np.asarray(target_distribution)
 
-    results: list[ShiftTestResult] = []
+    results: list[ShiftTestResult_old] = []
 
     # Energy distance (embeddings or logits)
     stat_energy = energy_distance(p_np, q_np)
     results.append(
-        ShiftTestResult(
+        ShiftTestResult_old(
             metric="Energy",
             layer=layer_name,
             shift_name=shift,
@@ -334,7 +338,7 @@ def calculate_energy_and_kl(
         stat_js = js_divergence(p_np, q_np)
         results.extend(
             [
-                ShiftTestResult(
+                ShiftTestResult_old(
                     metric="KL",
                     layer=layer_name,
                     shift_name=shift,
@@ -342,7 +346,7 @@ def calculate_energy_and_kl(
                     p_value=None,
                     extra={},
                 ),
-                ShiftTestResult(
+                ShiftTestResult_old(
                     metric="JS",
                     layer=layer_name,
                     shift_name=shift,
@@ -366,7 +370,7 @@ def calculate_all_shift_metrics(
     shift: str,
     apply_pca: bool = True,
     pca_dim: int = 32,
-) -> list[ShiftTestResult]:
+) -> list[ShiftTestResult_old]:
     """
     Convenience wrapper to compute BBSD, MMD, Energy, KL, and JS shift metrics.
 
@@ -396,3 +400,115 @@ def calculate_all_shift_metrics(
         layer_name, 
         shift
     )
+
+
+@dataclass
+class ShiftTestResult:
+    """
+    Container for storing the result of a statistical test for a shift.
+    """
+    shift: str=""
+
+    mp_mmd_pvalue: float=0.0
+    mp_mmd_is_significant: bool=False
+
+    layer_1_mmd_pvalue: float=0.0
+    layer_1_mmd_is_significant: bool=False
+
+    layer_2_mmd_pvalue: float=0.0
+    layer_2_mmd_is_significant: bool=False
+
+    layer_3_mmd_pvalue: float=0.0
+    layer_3_mmd_is_significant: bool=False
+
+    final_layer_mmd_pvalue: float=0.0
+    final_layer_mmd_is_significant: bool=False
+
+    bbsd_p_value: float|None = None
+    bbsd_is_significant: bool | None = False
+
+
+def calculate_detection_rates(
+        output_dir: Path,
+        dataset: str,
+        encoder_to_evaluate: str,
+        layers: list[str],
+        n_val: int,
+        val_embeddings: dict[str, torch.Tensor],
+        test_embeddings: dict[str, torch.Tensor],
+        shift_to_indices_dict: dict[str, np.ndarray],
+):
+
+    #######################################
+    # load softmax probabilities for BBSD #
+    #######################################
+
+    alpha = 0.05
+    results: list[ShiftTestResult] = []
+
+    # Loop through all shifts
+    for shift_name, idx_array in shift_to_indices_dict.items():
+        print(f"\nProcessing {shift_name}...")
+
+        shift_result = ShiftTestResult(shift=shift_name)
+
+        # Run MMD for each layer
+        for layer in layers:
+            print(f"--- Calculating MMD for layer: {layer} ---")
+
+            # Run MMD test
+            cat_embeddings = torch.concatenate([
+                val_embeddings[layer],
+                test_embeddings[layer][idx_array]
+            ])
+            n_components = min(32, cat_embeddings.shape[0], cat_embeddings.shape[1])
+            pca = PCA(n_components=n_components)
+            embeddings_32pca = pca.fit_transform(cat_embeddings.cpu().numpy())
+
+            mmd_p = run_mmd_permutation_test(
+                embeddings_32pca[:n_val],
+                embeddings_32pca[n_val:],
+                structure_permutation_fn=(
+                    embed_patient_permutations if dataset == "Mammo" else None
+                ),
+            )
+            sig = mmd_p < alpha
+
+            # Assign results for the current layer
+            if layer == "after_maxpool":
+                shift_result.mp_mmd_pvalue = mmd_p
+                shift_result.mp_mmd_is_significant = sig
+            elif layer == "layer_1":
+                shift_result.layer_1_mmd_pvalue = mmd_p
+                shift_result.layer_1_mmd_is_significant = sig
+            elif layer == "layer_2":
+                shift_result.layer_2_mmd_pvalue = mmd_p
+                shift_result.layer_2_mmd_is_significant = sig
+            elif layer == "layer_3":
+                shift_result.layer_3_mmd_pvalue = mmd_p
+                shift_result.layer_3_mmd_is_significant = sig
+            elif layer == "final_layer":
+                shift_result.final_layer_mmd_pvalue = mmd_p
+                shift_result.final_layer_mmd_is_significant = sig
+            else:
+                raise ValueError(f"Unexpected layer: {layer}")
+
+
+        # # Run BBSD on softmax outputs - requires task model?
+        # print(f"--- Calculating BBSD on softmax outputs ---")
+        # bbsd_sig, bbsd_p = run_bbsd(
+        #     probas_val, probas_test[idx_array], return_p_value=True
+        # )
+        # shift_result.bbsd_is_significant = bbsd_sig
+        # shift_result.bbsd_p_value = bbsd_p
+
+        # Collect the results from all shift combinations
+        results.append(shift_result)
+
+        # Save the results
+        data = [asdict(r) for r in results]
+        json_path = output_dir / f"{dataset}_{encoder_to_evaluate}_stats.json"
+        csv_path = output_dir / f"{dataset}_{encoder_to_evaluate}_stats.csv"
+        with open(json_path, "w") as jf:
+            json.dump(data, jf, indent=2)
+        pd.DataFrame(data).to_csv(csv_path, index=False)
