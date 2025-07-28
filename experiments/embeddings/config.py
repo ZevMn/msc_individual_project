@@ -109,11 +109,11 @@ class Config:
         "PadChest": {
             "csv_files": ("val_padchest.csv", "test_padchest.csv"),
             "column_map": {
-                "Age": "PatientAge",
+                "Gender": "PatientSex_DICOM",
                 "View": "Projection",
                 "Manufacturer": "Manufacturer",
             },
-            "plot_columns": ["Class", "Age", "View", "Manufacturer"],
+            "plot_columns": ["Class", "Gender", "View", "Manufacturer"],
         },
     }
 

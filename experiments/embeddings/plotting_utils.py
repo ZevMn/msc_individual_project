@@ -16,7 +16,7 @@ Typical workflow:
     2. Call 'plot_all_layers_labelled_scatter' to visualise each layer by labels.
     3. Call 'plot_shift_comparison_scatter' or 'plot_shift_comparison_joint'
        to compare reference vs shifted distributions.
-    4. Optionally enable statistical tests via 'calculate_bbsd_and_mmd'.
+    4. Optionally enable statistical tests via 'calculate_all_shift_metrics'.
 """
 
 from dataclasses import dataclass
@@ -379,6 +379,7 @@ def plot_shift_comparison_joint(output_dir: Path, inputs: PlotInputs) -> None:
                 "t-SNE 2": embeddings_tsne[:, 1],
             }
         )
+        df = df.sample(frac=1) # Shuffle data for unbiased visualisation
 
         projections = [("PCA 1", "PCA 2", "PCA"), ("t-SNE 1", "t-SNE 2", "t-SNE")]
 
@@ -455,6 +456,7 @@ def plot_shift_comparison_scatter(output_dir: Path, inputs: PlotInputs) -> None:
                 "t-SNE 2": embeddings_tsne[:, 1],
             }
         )
+        df = df.sample(frac=1) # Shuffle data for unbiased visualisation
 
         clean_layer = layer.replace("_", " ").title()
 

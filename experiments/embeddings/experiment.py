@@ -74,7 +74,7 @@ def run_experiment(encoder_to_evaluate: str, feat_mode: str, dataset: str) -> No
         inputs=inputs,
         val_labels=val_labels,
         test_labels=test_labels,
-        run_statistical_tests=True,
+        run_statistical_tests=False,
     )
     plotting.plot_shift_comparison_joint(
         output_dir=output_dir / "shift_comparison", inputs=inputs
