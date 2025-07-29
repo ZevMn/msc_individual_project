@@ -163,4 +163,10 @@ def run_stats_experiment(
         shift_to_indices_dict=shift_to_indices_dict,
     )
 
+    plotting.plot_detection_rate_heatmap(
+        output_dir=output_dir,
+        dataset=dataset,
+        encoder_to_evaluate=encoder_to_evaluate
+    )
+
     print(f"\n=== STAT CALCULATIONS COMPLETE ===")

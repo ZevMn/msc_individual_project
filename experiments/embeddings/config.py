@@ -150,17 +150,29 @@ class Config:
             ),
         },
         "RSNA": {
-            "gender_prev": partial(
-                shift_generator.rsna_gender_and_prev_shift,
-                target_female_proportion=0.40,
-                target_prevalence=0.25,
-            ),
-            "gender": partial(
+            # "gender_prev": partial(
+            #     shift_generator.rsna_gender_and_prev_shift,
+            #     target_female_proportion=0.40,
+            #     target_prevalence=0.25,
+            # ),
+            # "prev": partial(shift_generator.rsna_prev_shift, target_prevalence=0.25),
+            "gender_subtle": partial(
                 shift_generator.rsna_gender_shift, target_female_proportion=0.40
             ),
-            "prev": partial(shift_generator.rsna_prev_shift, target_prevalence=0.25),
-            "subpop": partial(
+            "gender_moderate": partial(
+                shift_generator.rsna_gender_shift, target_female_proportion=0.30
+            ),
+            "gender_extreme": partial(
+                shift_generator.rsna_gender_shift, target_female_proportion=0.15
+            ),
+            "subpop_subtle": partial(
                 shift_generator.rsna_subpopulation_shift, target_abnormal_neg=0.70
+            ),
+            "subpop_moderate": partial(
+                shift_generator.rsna_subpopulation_shift, target_abnormal_neg=0.80
+            ),
+            "subpop_extreme": partial(
+                shift_generator.rsna_subpopulation_shift, target_abnormal_neg=0.90
             ),
         },
         "PadChest": {

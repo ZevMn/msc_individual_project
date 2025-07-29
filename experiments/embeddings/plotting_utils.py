@@ -522,3 +522,50 @@ def plot_shift_comparison_scatter(output_dir: Path, inputs: PlotInputs) -> None:
         output_dir,
         f"{inputs.dataset}_{inputs.encoder_to_evaluate}_shift_comparison_scatter.png",
     )
+
+
+def plot_detection_rate_heatmap(
+    output_dir: Path,
+    dataset: str,
+    encoder_to_evaluate: str,
+) -> None:
+
+    set_plot_style()
+
+    try:
+        detection_rate_csv = pd.read_csv(
+            output_dir / f"{dataset}_{encoder_to_evaluate}_stats.csv"
+        )
+    except FileNotFoundError:
+        raise FileNotFoundError(f"The file {dataset}_{encoder_to_evaluate}_stats.csv was not found in {output_dir}.")
+
+    significance_columns = [
+        "mp_mmd_is_significant",
+        "layer_1_mmd_is_significant",
+        "layer_2_mmd_is_significant",
+        "layer_3_mmd_is_significant",
+        "final_layer_mmd_is_significant",
+        "bbsd_is_significant",
+    ]
+    significance_data = detection_rate_csv[significance_columns]
+    formatted_data = significance_data.apply(lambda x: f"**{x}**" if x else f"{x}")
+
+    fig = plt.figure(figsize=(10, 8))
+
+    sns.heatmap(
+        detection_rate_csv[significance_columns],
+        annot=formatted_data,
+        fmt="",
+        cmap="coolwarm",
+        linewidths=0.5,
+        cbar_kws={"label": "Detection Rate"},
+    )
+
+    title_and_save_fig(
+        f"Shift Detection Rate Heatmap: {dataset} | {encoder_to_evaluate.title()}",
+        fig,
+        output_dir,
+        f"{dataset}_{encoder_to_evaluate}_detection_rate_heatmap",
+    )
+
+    return
