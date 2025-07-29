@@ -176,18 +176,31 @@ class Config:
             ),
         },
         "PadChest": {
-            "gender_prev": partial(
-                shift_generator.padchest_gender_prev_shift,
-                target_disease=0.04,
-                target_female_proportion=0.50,
+            # "gender_prev": partial(
+            #     shift_generator.padchest_gender_prev_shift,
+            #     target_disease=0.04,
+            #     target_female_proportion=0.50,
+            # ),
+            "gender_subtle": partial(
+                shift_generator.padchest_gender_shift, target_female_proportion=0.45
             ),
-            "gender": partial(
-                shift_generator.padchest_gender_shift, target_female_proportion=0.50
+            "gender_moderate": partial(
+                shift_generator.padchest_gender_shift, target_female_proportion=0.35
             ),
-            "sample": partial(
+            "gender_extreme": partial(
+                shift_generator.padchest_gender_shift, target_female_proportion=0.20
+            ),
+            "sample_subtle": partial(
                 shift_generator.sample_shift_padchest,
-                target_prev_phillips=0.55,
-                target_pneumonia=0.1,
+                target_prev_phillips=0.47,
+            ),
+            "sample_moderate": partial(
+                shift_generator.sample_shift_padchest,
+                target_prev_phillips=0.57,
+            ),
+            "sample_extreme": partial(
+                shift_generator.sample_shift_padchest,
+                target_prev_phillips=0.70,
             ),
         },
     }
