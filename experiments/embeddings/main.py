@@ -43,7 +43,7 @@ from experiments.embeddings.experiments import (
 # --------- Defaults ----------
 ENCODER_TO_EVALUATE = "imagenet"  # Options: "imagenet", "simclr_imagenet", or "random"
 FEAT_MODE = "all"  # Options: "final", "early", or "all"
-DATASET = "Mammo"  # Options: "Mammo", "Retina", "RSNA", or "PadChest"
+DATASET = "RSNA"  # Options: "Mammo", "Retina", "RSNA", or "PadChest"
 
 # --------------
 # Main execution
@@ -65,8 +65,8 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    # print("\nRunning visualisation experiment:\n")
-    # run_visualisation_experiment(args.encoder_to_evaluate, args.feat_mode, args.dataset)
+    print("\nRunning visualisation experiment:\n")
+    run_visualisation_experiment(args.encoder_to_evaluate, args.feat_mode, args.dataset)
 
     print("\nRunning stats experiment:\n")
     run_stats_experiment(args.encoder_to_evaluate, args.feat_mode, args.dataset)

@@ -407,23 +407,23 @@ class ShiftTestResult:
 
     shift: str = ""
 
-    mp_mmd_pvalue: float = 0.0
+    mp_mmd_pvalue: float = 1.00
     mp_mmd_is_significant: bool = False
 
-    layer_1_mmd_pvalue: float = 0.0
+    layer_1_mmd_pvalue: float = 1.00
     layer_1_mmd_is_significant: bool = False
 
-    layer_2_mmd_pvalue: float = 0.0
+    layer_2_mmd_pvalue: float = 1.00
     layer_2_mmd_is_significant: bool = False
 
-    layer_3_mmd_pvalue: float = 0.0
+    layer_3_mmd_pvalue: float = 1.00
     layer_3_mmd_is_significant: bool = False
 
-    final_layer_mmd_pvalue: float = 0.0
+    final_layer_mmd_pvalue: float = 1.00
     final_layer_mmd_is_significant: bool = False
 
-    bbsd_p_value: float | None = None
-    bbsd_is_significant: bool | None = False
+    bbsd_pvalue: float | None = None
+    bbsd_is_significant: bool | None = None
 
 
 def calculate_detection_rates(
@@ -496,7 +496,7 @@ def calculate_detection_rates(
         #     probas_val, probas_test[idx_array], return_p_value=True
         # )
         # shift_result.bbsd_is_significant = bbsd_sig
-        # shift_result.bbsd_p_value = bbsd_p
+        # shift_result.bbsd_pvalue = bbsd_p
 
         # Collect the results from all shift combinations
         results.append(shift_result)

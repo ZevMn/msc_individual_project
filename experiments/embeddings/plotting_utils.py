@@ -30,6 +30,7 @@ import seaborn as sns
 import torch
 from matplotlib.figure import Figure
 import matplotlib.gridspec as gridspec
+from matplotlib.patches import Rectangle
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
@@ -532,34 +533,46 @@ def plot_detection_rate_heatmap(
 
     set_plot_style()
 
-    try:
-        detection_rate_csv = pd.read_csv(
-            output_dir / f"{dataset}_{encoder_to_evaluate}_stats.csv"
-        )
-    except FileNotFoundError:
-        raise FileNotFoundError(f"The file {dataset}_{encoder_to_evaluate}_stats.csv was not found in {output_dir}.")
+    # Load the shift detection rate csv
+    filepath = output_dir / f"{dataset}_{encoder_to_evaluate}_stats.csv"
+    if not filepath.exists():
+        raise FileNotFoundError(f"{filepath} not found.")
+    detection_rate_df = pd.read_csv(filepath, index_col=0)
 
-    significance_columns = [
-        "mp_mmd_is_significant",
-        "layer_1_mmd_is_significant",
-        "layer_2_mmd_is_significant",
-        "layer_3_mmd_is_significant",
-        "final_layer_mmd_is_significant",
-        "bbsd_is_significant",
-    ]
-    significance_data = detection_rate_csv[significance_columns]
-    formatted_data = significance_data.apply(lambda x: f"**{x}**" if x else f"{x}")
+    # Extract p‑value and significance columns
+    pval_cols = [c for c in detection_rate_df.columns if c.endswith("_pvalue")]
+    sig_cols = [c for c in detection_rate_df.columns if c.endswith("_is_significant")]
 
-    fig = plt.figure(figsize=(10, 8))
+    pvals = detection_rate_df[pval_cols]
+    sigs = detection_rate_df[sig_cols]
 
+    # Format p-values and append "*" if significant
+    p_arr = pvals.values
+    s_arr = sigs.values.astype(bool)
+    annot_arr = np.char.mod("%.2f", p_arr)
+    annot_arr = np.char.add(annot_arr, np.where(s_arr, "*", ""))
+
+    # Plot a heatmap
+    fig, ax = plt.subplots(figsize=(10, 8))
     sns.heatmap(
-        detection_rate_csv[significance_columns],
-        annot=formatted_data,
+        pvals,
+        annot=annot_arr,
         fmt="",
-        cmap="coolwarm",
+        cmap="Blues",
         linewidths=0.5,
-        cbar_kws={"label": "Detection Rate"},
+        cbar_kws={"label": "p value"},
+        ax=ax,
+        vmin=0.05,
+        vmax=1,
     )
+    # for i, j in zip(*np.where(s_arr)):
+    #     ax.add_patch(Rectangle((j, i), 1, 1, fill=False, edgecolor='black', lw=2))
+
+    # Clean up labels
+    ax.set_ylabel("Shift", fontsize=14)
+    clean_idx = [idx.replace("_", " ").title() for idx in pvals.index]
+    ax.set_xticklabels(pvals.columns, rotation=45, ha="right")
+    ax.set_yticklabels(clean_idx, rotation=0)
 
     title_and_save_fig(
         f"Shift Detection Rate Heatmap: {dataset} | {encoder_to_evaluate.title()}",
@@ -567,5 +580,3 @@ def plot_detection_rate_heatmap(
         output_dir,
         f"{dataset}_{encoder_to_evaluate}_detection_rate_heatmap",
     )
-
-    return
