@@ -164,9 +164,7 @@ def run_stats_experiment(
     )
 
     plotting.plot_detection_rate_heatmap(
-        output_dir=output_dir,
-        dataset=dataset,
-        encoder_to_evaluate=encoder_to_evaluate
+        output_dir=output_dir, dataset=dataset, encoder_to_evaluate=encoder_to_evaluate
     )
 
     print(f"\n=== STAT CALCULATIONS COMPLETE ===")

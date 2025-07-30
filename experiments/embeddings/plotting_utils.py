@@ -385,12 +385,13 @@ def plot_shift_comparison_joint(output_dir: Path, inputs: PlotInputs) -> None:
             }
         )
         df = df.sample(frac=1)  # Shuffle data for unbiased visualisation
+        sample = df.sample(n=min(2048, len(df)))
 
         projections = [("PCA 1", "PCA 2", "PCA"), ("t-SNE 1", "t-SNE 2", "t-SNE")]
 
         for x, y, title_suffix in projections:
             graph = sns.jointplot(
-                data=df,
+                data=sample,
                 x=x,
                 y=y,
                 hue="Shift",
@@ -462,13 +463,14 @@ def plot_shift_comparison_scatter(output_dir: Path, inputs: PlotInputs) -> None:
             }
         )
         df = df.sample(frac=1)  # Shuffle data for unbiased visualisation
+        sample = df.sample(n=min(2048, len(df)))
 
         clean_layer = layer.replace("_", " ").title()
 
         # PCA subplot
         ax_pca = fig.add_subplot(gs[0, i])
         sc = sns.scatterplot(
-            data=df,
+            data=sample,
             x="PCA 1",
             y="PCA 2",
             hue="Shift",

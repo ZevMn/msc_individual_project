@@ -78,6 +78,7 @@ class Config:
         "imagenet": "encoder_imagenet.pkl",
         "simclr_imagenet": "encoder_simclr_imagenet.pkl",
         "random": "encoder_random.pkl",
+        "modality_specific": "best.ckpt",
     }
 
     DATASET_CONFIG: dict[str, dict] = {
@@ -89,11 +90,13 @@ class Config:
                 "Manufacturer": "ManufacturerModelName",
             },
             "plot_columns": ["Class", "Laterality", "View", "Manufacturer"],
+            "modality_specific": "run_zexo630s",
         },
         "Retina": {
             "csv_files": ("retina_val.csv", "retina_test.csv"),
             "column_map": {"Site": "site"},
             "plot_columns": ["Class", "Site"],
+            "modality_specific": "run_ve3it5qy",
         },
         "RSNA": {
             "csv_files": ("val_rsna.csv", "test_rsna.csv"),
@@ -103,6 +106,7 @@ class Config:
                 "View": "View Position",
             },
             "plot_columns": ["Class", "Gender", "View"],
+            "modality_specific": "run_j0c09xra",
         },
         "PadChest": {
             "csv_files": ("val_padchest.csv", "test_padchest.csv"),
@@ -112,6 +116,7 @@ class Config:
                 "Manufacturer": "Manufacturer",
             },
             "plot_columns": ["Class", "Gender", "View", "Manufacturer"],
+            "modality_specific": "run_h4tbta6v",
         },
     }
 

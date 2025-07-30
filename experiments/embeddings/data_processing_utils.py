@@ -47,13 +47,20 @@ def generate_and_load_embeddings(
     test_df: pd.DataFrame,
 ) -> dict[str, dict[str, torch.Tensor]]:
 
-    encoder_pickle_path = (
-        Config.ROOT
-        / "experiments"
-        / "outputs"
-        / dataset
-        / Config.ENCODERS[encoder_to_evaluate]
-    )
+    if encoder_to_evaluate == "modality_specific":
+        encoder_pickle_path = (
+            "/vol/biomedic3/mb121/shift_identification/outputs"
+            / Config.DATASET_CONFIG[dataset]["modality_specific"]
+            / Config.ENCODERS[encoder_to_evaluate]
+        )
+    else:
+        encoder_pickle_path = (
+            Config.ROOT
+            / "experiments"
+            / "outputs"
+            / dataset
+            / Config.ENCODERS[encoder_to_evaluate]
+        )
 
     if not encoder_pickle_path.exists():
 

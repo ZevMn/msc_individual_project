@@ -458,9 +458,13 @@ def calculate_detection_rates(
             cat_embeddings = torch.concatenate(
                 [val_embeddings[layer], test_embeddings[layer][idx_array]]
             )
+            print(f"cat_embeddings.shape[0]: {cat_embeddings.shape[0]}")
+            print(f"cat_embeddings.shape[1]: {cat_embeddings.shape[1]}")
             n_components = min(32, cat_embeddings.shape[0], cat_embeddings.shape[1])
             pca = PCA(n_components=n_components)
             embeddings_32pca = pca.fit_transform(cat_embeddings.cpu().numpy())
+            print("Starting the permutation test...")
+            print("\n\n\n\n\n")
 
             mmd_p = run_mmd_permutation_test(
                 embeddings_32pca[:n_val],
