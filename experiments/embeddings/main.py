@@ -41,7 +41,7 @@ from experiments.embeddings.experiments import (
 )
 
 # --------- Defaults ----------
-ENCODER_TO_EVALUATE = "imagenet"  # Options: "imagenet", "simclr_imagenet", "random", or "modality_specific"
+ENCODER_TO_EVALUATE = "imagenet"  # Options: "imagenet", "simclr_imagenet", "random", or "simclr_modality_specific"
 FEAT_MODE = "all"  # Options: "final", "early", or "all"
 DATASET = "RSNA"  # Options: "Mammo", "Retina", "RSNA", or "PadChest"
 

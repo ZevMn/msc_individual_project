@@ -560,7 +560,7 @@ def plot_detection_rate_heatmap(
         pvals,
         annot=annot_arr,
         fmt="",
-        cmap="Blues",
+        cmap="Blues_r",
         linewidths=0.5,
         cbar_kws={"label": "p value"},
         ax=ax,

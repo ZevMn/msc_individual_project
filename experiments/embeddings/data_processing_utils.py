@@ -47,22 +47,22 @@ def generate_and_load_embeddings(
     test_df: pd.DataFrame,
 ) -> dict[str, dict[str, torch.Tensor]]:
 
-    if encoder_to_evaluate == "modality_specific":
-        encoder_pickle_path = (
-            "/vol/biomedic3/mb121/shift_identification/outputs"
-            / Config.DATASET_CONFIG[dataset]["modality_specific"]
-            / Config.ENCODERS[encoder_to_evaluate]
-        )
-    else:
-        encoder_pickle_path = (
-            Config.ROOT
-            / "experiments"
-            / "outputs"
-            / dataset
-            / Config.ENCODERS[encoder_to_evaluate]
-        )
+    encoder_pickle_path = (
+        Config.ROOT
+        / "experiments"
+        / "outputs"
+        / dataset
+        / Config.ENCODERS[encoder_to_evaluate] ### Amend this
+    )
 
     if not encoder_pickle_path.exists():
+
+        # Fetch correct modality specifc encoder model name
+        if encoder_to_evaluate == "simclr_modality_specific":
+            encoder_to_evaluate = (
+                "/vol/biomedic3/mb121/causal-contrastive/outputs/"
+                + Config.DATASET_CONFIG[dataset]["simclr_modality_specific"]
+            )
 
         val_preprocessed, test_preprocessed = preprocess_data(dataset, val_df, test_df)
 

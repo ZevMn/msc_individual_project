@@ -78,7 +78,7 @@ class Config:
         "imagenet": "encoder_imagenet.pkl",
         "simclr_imagenet": "encoder_simclr_imagenet.pkl",
         "random": "encoder_random.pkl",
-        "modality_specific": "best.ckpt",
+        "simclr_modality_specific": "simclr_modality_specific",
     }
 
     DATASET_CONFIG: dict[str, dict] = {
@@ -90,13 +90,15 @@ class Config:
                 "Manufacturer": "ManufacturerModelName",
             },
             "plot_columns": ["Class", "Laterality", "View", "Manufacturer"],
-            "modality_specific": "run_zexo630s",
+            "simclr_modality_specific": "run_byatk1eo/best.ckpt",
+            # "mae": "imagenet_mae",
         },
         "Retina": {
             "csv_files": ("retina_val.csv", "retina_test.csv"),
             "column_map": {"Site": "site"},
             "plot_columns": ["Class", "Site"],
-            "modality_specific": "run_ve3it5qy",
+            "simclr_modality_specific": "run_cwyi1g3d/epoch=449.ckpt",
+            # "mae": "raddino",
         },
         "RSNA": {
             "csv_files": ("val_rsna.csv", "test_rsna.csv"),
@@ -106,7 +108,8 @@ class Config:
                 "View": "View Position",
             },
             "plot_columns": ["Class", "Gender", "View"],
-            "modality_specific": "run_j0c09xra",
+            "simclr_modality_specific": "run_q0kry6pk/best.ckpt",
+            # "mae": "cxr_mae",
         },
         "PadChest": {
             "csv_files": ("val_padchest.csv", "test_padchest.csv"),
@@ -116,7 +119,8 @@ class Config:
                 "Manufacturer": "Manufacturer",
             },
             "plot_columns": ["Class", "Gender", "View", "Manufacturer"],
-            "modality_specific": "run_h4tbta6v",
+            "simclr_modality_specific": "run_q0kry6pk/best.ckpt",
+            # "mae": "cxr_mae",
         },
     }
 
