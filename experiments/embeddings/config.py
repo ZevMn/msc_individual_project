@@ -190,26 +190,27 @@ class Config:
             #     target_disease=0.04,
             #     target_female_proportion=0.50,
             # ),
+            # Initial: Female 51%, Phillips 42%
             "gender_subtle": partial(
-                shift_generator.padchest_gender_shift, target_female_proportion=0.45
+                shift_generator.padchest_gender_shift, target_female_proportion=0.49
             ),
             "gender_moderate": partial(
-                shift_generator.padchest_gender_shift, target_female_proportion=0.35
+                shift_generator.padchest_gender_shift, target_female_proportion=0.43
             ),
             "gender_extreme": partial(
-                shift_generator.padchest_gender_shift, target_female_proportion=0.20
+                shift_generator.padchest_gender_shift, target_female_proportion=0.36
             ),
             "sample_subtle": partial(
                 shift_generator.sample_shift_padchest,
-                target_prev_phillips=0.47,
+                target_prev_phillips=0.40,
             ),
             "sample_moderate": partial(
                 shift_generator.sample_shift_padchest,
-                target_prev_phillips=0.57,
+                target_prev_phillips=0.36,
             ),
             "sample_extreme": partial(
                 shift_generator.sample_shift_padchest,
-                target_prev_phillips=0.70,
+                target_prev_phillips=0.28,
             ),
         },
     }
