@@ -45,7 +45,7 @@ class Config:
         BATCH_SIZE: Default dataloader batch size.
         NUM_WORKERS: Number of workers for PyTorch dataloaders.
 
-        FEAT_MODES: Permissible feature extraction modes ('final', 'early', 'all').
+        FEAT_MODES_MAP: Permissible feature extraction modes ('final', 'early', 'all').
 
         ENCODERS: Mapping from encoder name to filename on disk.
 
@@ -53,6 +53,8 @@ class Config:
             - 'csv_files': Filenames for validation/test embedding CSVs.
             - 'column_map': Mapping from friendly column names to CSV column names.
             - 'plot_columns': Ordered list of categorical columns to colour plots by.
+            - 'simclr_modality_specific': Path to the SimCLR modality-specific checkpoint.
+            - 'modality_encoder_path': Path to the modality-specific encoder embeddings.
 
         SHIFT_REGISTRY: Nested mapping from dataset name to shift name to a callable
             that, when invoked, produces indices describing a type of covariate shift.
