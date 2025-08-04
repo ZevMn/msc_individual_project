@@ -97,7 +97,7 @@ def run_visualisation_experiment(
 # We want to loop through the different shift scenarios.
 # Ignore mixed shifts. Look at e.g. "acquisition" and "population" shifts.
 # For each type of shift, we want to analyse "subtle", "moderate" and "extreme".
-# -> Produce a table with MMD outputs from each layer of the encoder and also BBSD on softmax outputs.
+# -> Produce a table with MMD outputs from each layer of the encoder (and also BBSD on softmax outputs).
 # -> (Make sure to subsample properly - look at Mel's function).
 # -> For each row, output the correct data as a csv/json.
 # -> Create a separate script to run and collect the data and process it into a table.

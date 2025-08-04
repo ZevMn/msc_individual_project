@@ -100,7 +100,7 @@ class Config:
             "column_map": {"Site": "site"},
             "plot_columns": ["Class", "Site"],
             "simclr_modality_specific": "run_cwyi1g3d/epoch=449.ckpt",
-            "modality_encoder_path": "encoder_cwyi1g3d.pkl", ### ?
+            "modality_encoder_path": "encoder_cwyi1g3d.pkl",  ### ?
         },
         "RSNA": {
             "csv_files": ("val_rsna.csv", "test_rsna.csv"),

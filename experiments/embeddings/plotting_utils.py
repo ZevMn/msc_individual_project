@@ -117,7 +117,8 @@ def calculate_PCA_and_tSNE(
     Project embeddings with PCA and t-SNE.
 
     PCA is applied to reduce dimensionality (default 2D), followed by t-SNE
-    on the PCA output to obtain a 2D embedding.
+    on the PCA output to obtain a 2D embedding. Perplexity is set based on
+    sample size, and is always set between 5 and 30.
 
     Args:
         embeddings: Tensor of shape (n_samples, n_features).
@@ -152,7 +153,7 @@ def calculate_PCA_and_tSNE(
 
     # t-SNE always outputs 2D for plotting purposes
     n_samples = embeddings_np.shape[0]
-    perplexity = min(30, max(1, (n_samples - 1) // 3))
+    perplexity = min(30, max(5, (n_samples - 1) // 3))
     embeddings_tsne = TSNE(
         n_components=2,
         perplexity=perplexity,
@@ -170,13 +171,14 @@ def title_and_save_fig(
     title: str, fig: Figure, file_location: Path, file_name: str, fontsize: int = 16
 ) -> None:
     """
-    Saves a figure, closes it, and prints a confirmation.
+    Set a figure title, ensure 'file_location' exists, save PNG, and close.
 
     Args:
-        fig: Matplotlib figure to save.
-        file_location: Directory where the figure should be written. Created if
-            it does not already exist.
-        file_name: Name of figure to be saved.
+        title: Figure suptitle.
+        fig: Matplotlib Figure to save.
+        file_location: Target directory (created if needed).
+        file_name: Output file name (include extension).
+        fontsize: Title font size.
     """
     fig.suptitle(title, fontsize=fontsize)
     file_location.mkdir(parents=True, exist_ok=True)
@@ -209,10 +211,10 @@ def plot_layer_representation_scatter(
         dataset: Name of the dataset being analysed.
         layer_name: Name of the layer of the encoder being plotted.
         layer_embeddings: Feature embeddings tensor for this layer.
-        labels: Dict mapping column name to a NumPy array with categorical labels to colour points.
+        labels: Dict mapping column name to a NumPy array (of same length as 'layer_embeddings')
+            with categorical labels to colour points.
         shift: String identifier for the shift scenario (e.g., "no_shift", "acq").
         seed: Random seed for reproducibility of sampling points for plotting.
-        pca_components: The number of principal components to reduce to.
         num_samples: Maximum number of points to include in the plot.
     """
     set_plot_style()
@@ -493,7 +495,7 @@ def plot_shift_comparison_scatter(output_dir: Path, inputs: PlotInputs) -> None:
         # t-SNE subplot
         ax_tsne = fig.add_subplot(gs[1, i])
         sns.scatterplot(
-            data=df,
+            data=sample,
             x="t-SNE 1",
             y="t-SNE 2",
             hue="Shift",
@@ -532,6 +534,17 @@ def plot_detection_rate_heatmap(
     dataset: str,
     encoder_to_evaluate: str,
 ) -> None:
+    """
+    Generate a heatmap of p-values representing shift detection rates of all simulated
+    shifts across encoder layers, with significance marked by an asterisk.
+    Expects a CSV named f"{dataset}_{encoder}_stats.csv" in output_dir.
+    
+    Args:
+        output_dir: Directory where the heatmap PNG will be saved.
+        dataset: Name of the dataset being analysed.
+        encoder_to_evaluate: Name of the encoder used to generate features.
+        
+    """
 
     set_plot_style()
 
@@ -554,7 +567,7 @@ def plot_detection_rate_heatmap(
     annot_arr = np.char.mod("%.2f", p_arr)
     annot_arr = np.char.add(annot_arr, np.where(s_arr, "*", ""))
 
-    # Plot a heatmap
+    # Plot heatmap
     fig, ax = plt.subplots(figsize=(10, 8))
     sns.heatmap(
         pvals,
@@ -581,4 +594,66 @@ def plot_detection_rate_heatmap(
         fig,
         output_dir,
         f"{dataset}_{encoder_to_evaluate}_detection_rate_heatmap",
+    )
+
+def plot_detection_rate_linegraph(
+    output_dir: Path,
+    dataset: str,
+    encoder_to_evaluate: str,
+) -> None:
+    """
+    Generate a line graph of p-values representing shift detection rates of all simulated
+    shifts across encoder layers, with significance marked by an asterisk.
+    Expects a CSV named f"{dataset}_{encoder}_stats.csv" in output_dir.
+    
+    Args:
+        output_dir: Directory where the heatmap PNG will be saved.
+        dataset: Name of the dataset being analysed.
+        encoder_to_evaluate: Name of the encoder used to generate features.
+        
+    """
+    set_plot_style()
+
+    # Load the shift detection rate csv
+    filepath = output_dir / f"{dataset}_{encoder_to_evaluate}_stats.csv"
+    if not filepath.exists():
+        raise FileNotFoundError(f"{filepath} not found.")
+    detection_rate_df = pd.read_csv(filepath, index_col=0)
+
+    # Extract p‑value and significance columns
+    pval_cols = [c for c in detection_rate_df.columns if c.endswith("_pvalue")]
+    sig_cols = [c for c in detection_rate_df.columns if c.endswith("_is_significant")]
+
+    pvals = detection_rate_df[pval_cols]
+    sigs = detection_rate_df[sig_cols]
+
+    layers = [col.removesuffix("_pvalue").replace("_", " ").title()
+              for col in pval_cols]
+    shifts = [idx.replace("_", " ").title() for idx in pvals.index]
+
+    # Plot the line graph
+    fig, ax = plt.subplots(figsize=(10, 8))
+    x = list(range(len(layers)))
+
+    for shift_name, (p_row, s_row) in zip(shifts, zip(pvals.values, sigs.values)):
+        ax.plot(x, p_row, marker="o", label=shift_name)
+        for xi, (yi, sig) in enumerate(zip(p_row, s_row)):
+            if sig:
+                ax.text(xi, yi + 0.02, "*", ha="center", va="bottom", fontsize=12)
+    
+    # Axis formatting
+    ax.set_xticks(x)
+    ax.set_xticklabels(layers, rotation=45, ha="right")
+    ax.set_ylabel("p-value", fontsize=12)
+    ax.set_xlabel("Encoder Layer / Test", fontsize=12)
+    ax.set_ylim(0, 1.05)
+    ax.axhline(0.05, color="red", linestyle="--",
+               label="Significance Threshold (0.05)")
+    ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+ 
+    title_and_save_fig(
+        f"Shift Detection Rate Line Graph: {dataset} | {encoder_to_evaluate.replace('_', ' ').title()}",
+        fig,
+        output_dir,
+        f"{dataset}_{encoder_to_evaluate}_detection_rate_line_graph",
     )

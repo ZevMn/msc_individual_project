@@ -22,6 +22,16 @@ from data_handling.xray import PadChestDataset, RNSAPneumoniaDetectionDataset
 # Generate val and test csvs into dfs and add index column
 # --------------------------------------------------------
 def load_csvs_and_add_idx_column(dataset: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Load validation and test CSVs for a dataset and to each one append an
+    'idx_in_original' column used to track rows across simulated shifts.
+
+    Args:
+        dataset: Key in Config.DATASET_CONFIG.
+
+    Returns:
+        (val_df, test_df): DataFrames for validation and test splits.
+    """
 
     val_csv, test_csv = Config.DATASET_CONFIG[dataset]["csv_files"]
 
@@ -46,9 +56,18 @@ def generate_and_load_embeddings(
     val_df: pd.DataFrame,
     test_df: pd.DataFrame,
 ) -> dict[str, dict[str, torch.Tensor]]:
+    """
+    Ensure embeddings exist for (dataset, encoder_to_evaluate, feat_mode).
+    If the cached pickle is missing, preprocess data and call 'get_or_save_outputs'.
+    Returns the loaded encoder outputs mapping for "val" and "test".
+
+    Returns:
+        dict: {"val": {layer_x: Tensor, ..., "y": Tensor}, "test": {...}}
+    """
 
     if encoder_to_evaluate == "simclr_modality_specific":
-        encoder_pickle_path = (Config.ROOT
+        encoder_pickle_path = (
+            Config.ROOT
             / "experiments"
             / "outputs"
             / dataset
@@ -265,6 +284,11 @@ def extract_plot_labels(
 
 
 def simulate_shifts(dataset: str, test_df: pd.DataFrame) -> dict[str, np.ndarray]:
+    """
+    Apply all registered shift functions for 'dataset' to the test DataFrame and
+    return a mapping from shift name to the original row indices ('idx_in_original')
+    that comprise each shifted subset.
+    """
 
     shift_to_indices_dict = {}
 

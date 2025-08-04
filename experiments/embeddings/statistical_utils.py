@@ -25,10 +25,10 @@ import numpy as np
 import pandas as pd
 import torch
 
-import numpy as np
 from scipy.spatial.distance import cdist
 from sklearn.decomposition import PCA
-from sklearn import metrics
+from sklearn.metrics import pairwise_distances
+from sklearn.metrics.pairwise import rbf_kernel
 
 from shift_identification_detection.bbsd_tests import run_bbsd
 from shift_identification_detection.mmd_test import (
@@ -179,10 +179,10 @@ def calculate_bbsd_and_mmd(
         q_reduced = q_np
         combined_reduced = combined
 
-    distances = metrics.pairwise_distances(combined_reduced)
+    distances = pairwise_distances(combined_reduced)
     sigma = float(np.median(distances))
     gamma = 1.0 / max(sigma, 1e-12)
-    k_mat = metrics.pairwise.rbf_kernel(combined_reduced, combined_reduced, gamma=gamma)
+    k_mat = rbf_kernel(combined_reduced, combined_reduced, gamma=gamma)
     n1 = p_np.shape[0]
     observed_mmd = float(get_mmd_from_all_distances(k_mat, n1))
     pval_mmd = float(run_mmd_permutation_test(p_reduced, q_reduced))
@@ -455,7 +455,7 @@ def calculate_detection_rates(
             print(f"--- Calculating MMD for layer: {layer} ---")
 
             # Run MMD test
-            cat_embeddings = torch.concatenate(
+            cat_embeddings = torch.cat(
                 [val_embeddings[layer], test_embeddings[layer][idx_array]]
             )
             print(f"cat_embeddings.shape[0]: {cat_embeddings.shape[0]}")
