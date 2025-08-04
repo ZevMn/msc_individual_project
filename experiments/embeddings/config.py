@@ -91,14 +91,14 @@ class Config:
             },
             "plot_columns": ["Class", "Laterality", "View", "Manufacturer"],
             "simclr_modality_specific": "run_byatk1eo/best.ckpt",
-            # "mae": "imagenet_mae",
+            "modality_encoder_path": "encoder_byatk1eo.pkl",
         },
         "Retina": {
             "csv_files": ("retina_val.csv", "retina_test.csv"),
             "column_map": {"Site": "site"},
             "plot_columns": ["Class", "Site"],
             "simclr_modality_specific": "run_cwyi1g3d/epoch=449.ckpt",
-            # "mae": "raddino",
+            "modality_encoder_path": "encoder_cwyi1g3d.pkl", ### ?
         },
         "RSNA": {
             "csv_files": ("val_rsna.csv", "test_rsna.csv"),
@@ -109,7 +109,7 @@ class Config:
             },
             "plot_columns": ["Class", "Gender", "View"],
             "simclr_modality_specific": "run_q0kry6pk/best.ckpt",
-            # "mae": "cxr_mae",
+            "modality_encoder_path": "encoder_q0kry6pk.pkl",
         },
         "PadChest": {
             "csv_files": ("val_padchest.csv", "test_padchest.csv"),
@@ -120,7 +120,7 @@ class Config:
             },
             "plot_columns": ["Class", "Gender", "View", "Manufacturer"],
             "simclr_modality_specific": "run_q0kry6pk/best.ckpt",
-            # "mae": "cxr_mae",
+            "modality_encoder_path": "encoder_q0kry6pk.pkl",
         },
     }
 

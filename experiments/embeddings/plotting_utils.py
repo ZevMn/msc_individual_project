@@ -577,7 +577,7 @@ def plot_detection_rate_heatmap(
     ax.set_yticklabels(clean_idx, rotation=0)
 
     title_and_save_fig(
-        f"Shift Detection Rate Heatmap: {dataset} | {encoder_to_evaluate.title()}",
+        f"Shift Detection Rate Heatmap: {dataset} | {encoder_to_evaluate.replace('_', ' ').title()}",
         fig,
         output_dir,
         f"{dataset}_{encoder_to_evaluate}_detection_rate_heatmap",

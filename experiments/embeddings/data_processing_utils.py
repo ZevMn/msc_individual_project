@@ -47,13 +47,21 @@ def generate_and_load_embeddings(
     test_df: pd.DataFrame,
 ) -> dict[str, dict[str, torch.Tensor]]:
 
-    encoder_pickle_path = (
-        Config.ROOT
-        / "experiments"
-        / "outputs"
-        / dataset
-        / Config.ENCODERS[encoder_to_evaluate] ### Amend this
-    )
+    if encoder_to_evaluate == "simclr_modality_specific":
+        encoder_pickle_path = (Config.ROOT
+            / "experiments"
+            / "outputs"
+            / dataset
+            / Config.DATASET_CONFIG[dataset]["modality_encoder_path"]
+        )
+    else:
+        encoder_pickle_path = (
+            Config.ROOT
+            / "experiments"
+            / "outputs"
+            / dataset
+            / Config.ENCODERS[encoder_to_evaluate]
+        )
 
     if not encoder_pickle_path.exists():
 
