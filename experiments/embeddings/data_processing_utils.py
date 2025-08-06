@@ -17,12 +17,6 @@ from data_handling.mammo import EmbedDataset
 from data_handling.retina import RetinaDataset
 from data_handling.xray import PadChestDataset, RNSAPneumoniaDetectionDataset
 
-# from experiments.shift_generator import (
-#     simple_val_sampling_embed_stratified,
-#     simple_val_sampling_base,
-#     retina_acq_prev_shift,
-# )
-
 
 # --------------------------------------------------------
 # Generate val and test csvs into dfs and add index column
@@ -310,31 +304,3 @@ def simulate_shifts(dataset: str, test_df: pd.DataFrame) -> dict[str, np.ndarray
         shift_to_indices_dict[shift_name] = df["idx_in_original"].to_numpy()
 
     return shift_to_indices_dict
-
-# NOT APPLICABLE AT THE MOMENT
-# -----------------------------------
-# def subsample_validation_set(
-#         dataset: str,
-#         val_df: pd.DataFrame, 
-#         n_val: int
-#     ) -> pd.DataFrame:
-#     """
-#     Subsample the validation DataFrame to a specified number of samples.
-
-#     Args:
-#         dataset (str): The name of the dataset, used to determine the sampling function.
-#         val_df (pd.DataFrame): The original validation DataFrame.
-#         n_val (int): The size of the desired subsample.
-
-#     Returns:
-#         pd.DataFrame: A subsampled DataFrame containing 'n_val' samples.
-#     """
-
-#     if dataset == "Mammo":
-#         return simple_val_sampling_embed_stratified(val_df, n_val)
-#     elif dataset in ["RSNA", "PadChest"]:
-#         return simple_val_sampling_base(val_df, n_val)
-#     elif dataset == "Retina":
-#         return retina_acq_prev_shift(val_df, target_dataset_size=n_val)
-#     else:
-#         raise ValueError(f"Unknown dataset: {dataset}")
