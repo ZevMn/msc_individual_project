@@ -21,7 +21,6 @@ Typical workflow:
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -30,12 +29,10 @@ import seaborn as sns
 import torch
 from matplotlib.figure import Figure
 import matplotlib.gridspec as gridspec
-from matplotlib.patches import Rectangle
-from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
 
 from experiments.embeddings.config import Config, PlotConfig
 from experiments.embeddings.statistical_utils import (
+    calculate_PCA_and_tSNE,
     calculate_all_shift_metrics,
     save_results,
 )
@@ -106,65 +103,6 @@ def concat_embeddings(
         shift_labels.extend([shift_name] * len(shift_embeddings))
 
     return torch.cat(cat_embeddings), shift_labels
-
-
-def calculate_PCA_and_tSNE(
-    embeddings: torch.Tensor,
-    pca_components: int = 2,
-    seed: int = Config.SEED,
-) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Project embeddings with PCA and t-SNE.
-
-    PCA is applied to reduce dimensionality (default 2D), followed by t-SNE
-    on the PCA output to obtain a 2D embedding. Perplexity is set based on
-    sample size, and is always set between 5 and 30.
-
-    Args:
-        embeddings: Tensor of shape (n_samples, n_features).
-        pca_components: Number of components for PCA (capped to available dims).
-        seed: Random seed for reproducibility.
-
-    Returns:
-        Tuple (embeddings_pca, embeddings_tsne), both np.ndarrays.
-    """
-    if embeddings.is_cuda:
-        embeddings = embeddings.cpu()
-
-    embeddings_np = embeddings.numpy()
-    if embeddings_np.ndim != 2:
-        raise ValueError(f"Expected 2D embeddings, got shape {embeddings_np.shape}")
-
-    max_components = min(embeddings_np.shape[0], embeddings_np.shape[1])
-    if max_components < 2:
-        raise ValueError(
-            f"Too few samples or features to reduce: shape {embeddings_np.shape}"
-        )
-
-    pca_components = min(pca_components, max_components)
-    pca = PCA(n_components=pca_components, whiten=False, random_state=seed)
-    embeddings_pca = pca.fit_transform(embeddings_np)
-
-    # Optional: log explained variance
-    print(f"PCA shape: {embeddings_pca.shape}")
-    print(
-        f"PCA explained variance ratio: {pca.explained_variance_ratio_[:min(2, pca_components)]}"
-    )
-
-    # t-SNE always outputs 2D for plotting purposes
-    n_samples = embeddings_np.shape[0]
-    perplexity = min(30, max(5, (n_samples - 1) // 3))
-    embeddings_tsne = TSNE(
-        n_components=2,
-        perplexity=perplexity,
-        init="random",
-        learning_rate="auto",
-        random_state=seed,
-    ).fit_transform(embeddings_pca)
-
-    print(f"t-SNE shape: {embeddings_tsne.shape}")
-
-    return embeddings_pca, embeddings_tsne
 
 
 def title_and_save_fig(
@@ -290,24 +228,20 @@ def plot_all_layer_representations_scatter(
     inputs: PlotInputs,
     val_labels: dict[str, np.ndarray],
     test_labels: dict[str, np.ndarray],
-    run_statistical_tests: bool = False,
 ) -> None:
     """
     Plot labelled PCA/t-SNE scatterplots for each layer and each shift subset.
 
     For every layer in inputs.layers:
-        1. Plot the full validation set (no shift).
-        2. For each shift subset, plot the corresponding test embeddings.
-        3. Optionally, run BBSD and MMD between validation and each shifted subset.
+        - Plot the full validation set (no shift).
+        - For each shift subset, plot the corresponding test embeddings.
 
     Args:
         output_dir: Directory where the plot PNGs will be saved.
         inputs: A 'PlotInputs' instance.
         val_labels: Dict of label arrays (same length as validation embeddings).
         test_labels: Dict of label arrays (same length as test embeddings).
-        run_statistical_tests: If True, BBSD and MMD tests are executed.
     """
-    all_results = []
 
     for layer in inputs.layers:
         print(f"\n--- Processing layer: {layer} ---")
@@ -337,18 +271,6 @@ def plot_all_layer_representations_scatter(
                 labels=shifted_labels,
                 shift=shift_name,
             )
-
-            if run_statistical_tests:
-                results = calculate_all_shift_metrics(
-                    source_distribution=inputs.val_embeddings[layer],
-                    target_distribution=inputs.test_embeddings[layer][idx_array],
-                    layer_name=layer,
-                    shift=shift_name,
-                )
-                all_results.extend(results)
-
-    if run_statistical_tests and all_results:
-        save_results(all_results, output_dir)
 
 
 def plot_shift_comparison_joint(output_dir: Path, inputs: PlotInputs) -> None:

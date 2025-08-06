@@ -9,7 +9,11 @@ Example usage:
 from experiments.embeddings.config import Config
 from experiments.embeddings import plotting_utils as plotting
 from experiments.embeddings import data_processing_utils as data_processing
-from experiments.embeddings.statistical_utils import calculate_detection_rates
+from experiments.embeddings.statistical_utils import (
+    calculate_detection_rates,
+    calculate_bootstrap_detection_rates,
+)
+# from experiments.embeddings.data_processing_utils import subsample_validation_set
 
 
 # -----------------------------------------
@@ -30,6 +34,7 @@ def run_visualisation_experiment(
         / "Plots"
         / encoder_to_evaluate
     )
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     print(
         f"\n=== {dataset.upper()} | {encoder_to_evaluate.upper()} | {feat_mode.upper()} ===\n"
@@ -77,7 +82,6 @@ def run_visualisation_experiment(
         inputs=inputs,
         val_labels=val_labels,
         test_labels=test_labels,
-        run_statistical_tests=False,
     )
     plotting.plot_shift_comparison_joint(
         output_dir=output_dir / "shift_comparison", inputs=inputs
@@ -150,8 +154,9 @@ def run_stats_experiment(
         dataset=dataset, test_df=test_df
     )
 
-    # Calculate shift detection rates for the simluated shifts
-    n_val = len(val_df)
+    n_val = val_df.shape[0]
+
+    # Calculate shift detection rates for the simulated shifts
     calculate_detection_rates(
         output_dir=output_dir,
         dataset=dataset,
@@ -166,5 +171,77 @@ def run_stats_experiment(
     plotting.plot_detection_rate_heatmap(
         output_dir=output_dir, dataset=dataset, encoder_to_evaluate=encoder_to_evaluate
     )
+    plotting.plot_detection_rate_linegraph(
+        output_dir=output_dir, dataset=dataset, encoder_to_evaluate=encoder_to_evaluate
+    )
 
     print(f"\n=== STAT CALCULATIONS COMPLETE ===")
+
+
+# -----------------------------------------
+# Third experiment called in main execution
+# -----------------------------------------
+def run_bootstrap_experiment(
+    encoder_to_evaluate: str, feat_mode: str, dataset: str
+) -> None:
+    """
+    Runs the bootstrap experiment to calculate detection rates for covariate shifts.
+    """
+    Config.validate()
+    Config.set_seeds()
+
+    output_dir = (
+        Config.ROOT
+        / "experiments"
+        / "outputs"
+        / "CollectedBootstrapResults"
+        / encoder_to_evaluate
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    print(
+        f"\n=== {dataset.upper()} | {encoder_to_evaluate.upper()} | {feat_mode.upper()} ===\n"
+    )
+
+    # Process test and val CSVs
+    val_df, test_df = data_processing.load_csvs_and_add_idx_column(dataset=dataset)
+
+    # Generate or load embeddings
+    encoder_output = data_processing.generate_and_load_embeddings(
+        encoder_to_evaluate=encoder_to_evaluate,
+        feat_mode=feat_mode,
+        dataset=dataset,
+        val_df=val_df,
+        test_df=test_df,
+    )
+
+    # Validate the embeddings output and extract layers, and val/test splits
+    layers, val_embeddings, test_embeddings = (
+        data_processing.validate_and_process_embeddings(encoder_output=encoder_output)
+    )
+
+    # Generate covariate-shifted test subsets and store their original indices
+    shift_to_indices_dict = data_processing.simulate_shifts(
+        dataset=dataset, test_df=test_df
+    )
+
+    # Bootstrap experiment configuration
+    bootstrap_config = {
+        'n_bootstrap': 200,
+        'n_val': 2000,
+        'shift_subset_sizes': [100, 250, 500, 1000]
+    }
+
+    # Calculate bootstrap detection rates for the simulated shifts
+    calculate_bootstrap_detection_rates(
+        output_dir=output_dir,
+        dataset=dataset,
+        encoder_to_evaluate=encoder_to_evaluate,
+        layers=layers,
+        val_embeddings=val_embeddings,
+        test_embeddings=test_embeddings,
+        shift_to_indices_dict=shift_to_indices_dict,
+        **bootstrap_config
+    )
+
+    print(f"\n=== BOOTSTRAP CALCULATIONS COMPLETE ===")

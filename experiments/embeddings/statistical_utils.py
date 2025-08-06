@@ -20,6 +20,7 @@ and to save results in JSON and CSV format.
 from dataclasses import dataclass, asdict
 from pathlib import Path
 import json
+from typing import Tuple
 
 import numpy as np
 import pandas as pd
@@ -27,6 +28,7 @@ import torch
 
 from scipy.spatial.distance import cdist
 from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
 from sklearn.metrics import pairwise_distances
 from sklearn.metrics.pairwise import rbf_kernel
 
@@ -38,6 +40,8 @@ from shift_identification_detection.mmd_test import (
 from shift_identification_detection.shift_identification import (
     embed_patient_permutations,
 )
+
+from experiments.embeddings.config import Config
 
 
 @dataclass
@@ -75,6 +79,65 @@ def save_results(results: list[ShiftTestResult_old], output_dir: Path) -> None:
     with open(output_dir.with_suffix(".json"), "w") as f:
         json.dump(data, f, indent=2)
     pd.DataFrame(data).to_csv(output_dir.with_suffix(".csv"), index=False)
+
+
+def calculate_PCA_and_tSNE(
+    embeddings: torch.Tensor,
+    pca_components: int = 2,
+    seed: int = Config.SEED,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Project embeddings with PCA and t-SNE.
+
+    PCA is applied to reduce dimensionality (default 2D), followed by t-SNE
+    on the PCA output to obtain a 2D embedding. Perplexity is set based on
+    sample size, and is always set between 5 and 30.
+
+    Args:
+        embeddings: Tensor of shape (n_samples, n_features).
+        pca_components: Number of components for PCA (capped to available dims).
+        seed: Random seed for reproducibility.
+
+    Returns:
+        Tuple (embeddings_pca, embeddings_tsne), both np.ndarrays.
+    """
+    if embeddings.is_cuda:
+        embeddings = embeddings.cpu()
+
+    embeddings_np = embeddings.numpy()
+    if embeddings_np.ndim != 2:
+        raise ValueError(f"Expected 2D embeddings, got shape {embeddings_np.shape}")
+
+    max_components = min(embeddings_np.shape[0], embeddings_np.shape[1])
+    if max_components < 2:
+        raise ValueError(
+            f"Too few samples or features to reduce: shape {embeddings_np.shape}"
+        )
+
+    pca_components = min(pca_components, max_components)
+    pca = PCA(n_components=pca_components, whiten=False, random_state=seed)
+    embeddings_pca = pca.fit_transform(embeddings_np)
+
+    # Optional: log explained variance
+    print(f"PCA shape: {embeddings_pca.shape}")
+    print(
+        f"PCA explained variance ratio: {pca.explained_variance_ratio_[:min(2, pca_components)]}"
+    )
+
+    # t-SNE always outputs 2D for plotting purposes
+    n_samples = embeddings_np.shape[0]
+    perplexity = min(30, max(5, (n_samples - 1) // 3))
+    embeddings_tsne = TSNE(
+        n_components=2,
+        perplexity=perplexity,
+        init="random",
+        learning_rate="auto",
+        random_state=seed,
+    ).fit_transform(embeddings_pca)
+
+    print(f"t-SNE shape: {embeddings_tsne.shape}")
+
+    return embeddings_pca, embeddings_tsne
 
 
 # -----------------------------
@@ -361,8 +424,6 @@ def calculate_energy_and_kl(
 # --------------------------
 # Helper: Gather all metrics
 # --------------------------
-
-
 def calculate_all_shift_metrics(
     source_distribution: torch.Tensor | np.ndarray,
     target_distribution: torch.Tensor | np.ndarray,
@@ -422,9 +483,6 @@ class ShiftTestResult:
     final_layer_mmd_pvalue: float = 1.00
     final_layer_mmd_is_significant: bool = False
 
-    bbsd_pvalue: float | None = None
-    bbsd_is_significant: bool | None = None
-
 
 def calculate_detection_rates(
     output_dir: Path,
@@ -436,11 +494,7 @@ def calculate_detection_rates(
     test_embeddings: dict[str, torch.Tensor],
     shift_to_indices_dict: dict[str, np.ndarray],
 ):
-
-    #######################################
-    # load softmax probabilities for BBSD #
-    #######################################
-
+    
     alpha = 0.05
     results: list[ShiftTestResult] = []
 
@@ -458,17 +512,22 @@ def calculate_detection_rates(
             cat_embeddings = torch.cat(
                 [val_embeddings[layer], test_embeddings[layer][idx_array]]
             )
-            print(f"cat_embeddings.shape[0]: {cat_embeddings.shape[0]}")
-            print(f"cat_embeddings.shape[1]: {cat_embeddings.shape[1]}")
-            n_components = min(32, cat_embeddings.shape[0], cat_embeddings.shape[1])
+            n_samples = cat_embeddings.shape[0]
+            n_features = cat_embeddings.shape[1]
+            print(f"n_samples: {n_samples}")
+            print(f"n_features: {n_features}")
+            n_components = min(32, n_samples, n_features)
             pca = PCA(n_components=n_components)
-            embeddings_32pca = pca.fit_transform(cat_embeddings.cpu().numpy())
+            embeddings_pca = pca.fit_transform(cat_embeddings.cpu().numpy())
             print("Starting the permutation test...")
             print("\n\n\n\n\n")
 
+            val_pca = embeddings_pca[:n_val]
+            test_pca = embeddings_pca[n_val:]
+
             mmd_p = run_mmd_permutation_test(
-                embeddings_32pca[:n_val],
-                embeddings_32pca[n_val:],
+                val_pca,
+                test_pca,
                 structure_permutation_fn=(
                     embed_patient_permutations if dataset == "Mammo" else None
                 ),
@@ -494,14 +553,6 @@ def calculate_detection_rates(
             else:
                 raise ValueError(f"Unexpected layer: {layer}")
 
-        # # Run BBSD on softmax outputs - requires task model?
-        # print(f"--- Calculating BBSD on softmax outputs ---")
-        # bbsd_sig, bbsd_p = run_bbsd(
-        #     probas_val, probas_test[idx_array], return_p_value=True
-        # )
-        # shift_result.bbsd_is_significant = bbsd_sig
-        # shift_result.bbsd_pvalue = bbsd_p
-
         # Collect the results from all shift combinations
         results.append(shift_result)
 
@@ -512,3 +563,177 @@ def calculate_detection_rates(
         with open(json_path, "w") as jf:
             json.dump(data, jf, indent=2)
         pd.DataFrame(data).to_csv(csv_path, index=False)
+
+
+def calculate_bootstrap_detection_rates(
+    output_dir: Path,
+    dataset: str,
+    encoder_to_evaluate: str,
+    layers: list[str],
+    val_embeddings: dict[str, torch.Tensor],
+    test_embeddings: dict[str, torch.Tensor],
+    shift_to_indices_dict: dict[str, np.ndarray],
+    n_bootstrap: int,
+    n_val: int,
+    shift_subset_sizes: list[int]
+) -> None:
+    """
+    Calculate bootstrap detection rates for each shift, layer, and test subset size.
+    
+    For each combination:
+    - Bootstrap samples both validation (n_val) and test (test_size) subsets
+    - Applies PCA dimensionality reduction
+    - Runs MMD permutation test
+    - Counts significant detections (p < 0.05)
+    - Calculates detection rate as proportion of significant results
+    
+    Args:
+        output_dir (Path): Directory to save results.
+        dataset (str): Dataset name.
+        encoder_to_evaluate (str): Encoder identifier.
+        layers (list[str]): List of layer names.
+        val_embeddings (dict): Validation embeddings per layer.
+        test_embeddings (dict): Test embeddings per layer.
+        shift_to_indices_dict (dict): Mapping of shifts to test indices.
+        n_bootstrap (int): Number of bootstrap iterations.
+        n_val (int): Number of validation samples to use per bootstrap.
+        shift_subset_sizes (list[int]): List of test subset sizes to evaluate.
+    """
+
+    alpha = 0.05
+    results = {
+        'shift': [],
+        'layer': [],
+        'test_size': [],
+        'detection_rate': [],
+        'mean_pvalue': [],
+        'std_pvalue': [],
+        'n_successful_bootstraps': []
+    }
+    
+    print(f"\n=== Starting bootstrap experiment with {n_bootstrap} iterations ===")
+    print(f"Validation samples per bootstrap: {n_val}")
+    print(f"Shift subset sizes: {shift_subset_sizes}")
+    print(f"Significance threshold: {alpha}")
+    
+    # Get total available validation samples
+    total_val_samples = len(next(iter(val_embeddings.values())))
+    if n_val > total_val_samples:
+        print(f"! Warning: Requested {n_val} val samples but only {total_val_samples} available.")
+        n_val = total_val_samples
+
+    # Process each shift
+    for shift_name, shift_indices in shift_to_indices_dict.items():
+        print(f"\nProcessing shift: {shift_name}...")
+        
+        # Process each layer
+        for layer in layers:
+            print(f"-- Layer: {layer}")
+            
+            # Get embeddings for this layer
+            val_embeddings_layer = val_embeddings[layer]
+            shift_embeddings_layer = test_embeddings[layer][shift_indices]
+            n_shift_samples = len(shift_embeddings_layer)
+
+            # Process each shift subset size
+            for shift_subset_size in shift_subset_sizes:
+                print(f"     Shift subset size: {shift_subset_size}")
+
+                # Check we have enough samples
+                if shift_subset_size > n_shift_samples:
+                    print(f"! Warning: Requested {shift_subset_size} samples but only {n_shift_samples} available.")
+                    shift_subset_size = n_shift_samples
+                
+                # Bootstrap iterations
+                p_values = []
+                significant_detections = 0
+                successful_bootstraps = 0
+                
+                for bootstrap_iter in range(n_bootstrap):
+                    try:
+                        # Bootstrap sample validation set
+                        val_indices = np.random.choice(
+                            total_val_samples, 
+                            size=n_val, 
+                            replace=False
+                        )
+                        val_bootstrap = val_embeddings_layer[val_indices]
+                        
+                        # Bootstrap sample shift set
+                        shift_indices = np.random.choice(
+                            n_shift_samples, 
+                            size=shift_subset_size, 
+                            replace=False
+                        )
+                        shift_bootstrap = shift_embeddings_layer[shift_indices]
+                        
+                        # Combine embeddings for PCA preprocessing (following working implementation)
+                        cat_embeddings = torch.cat([val_bootstrap, shift_bootstrap])
+                        
+                        # Apply PCA preprocessing (following the working implementation)
+                        n_samples_total = cat_embeddings.shape[0]
+                        n_features = cat_embeddings.shape[1]
+                        n_components = min(32, n_samples_total, n_features)
+                        
+                        pca = PCA(n_components=n_components)
+                        embeddings_pca = pca.fit_transform(cat_embeddings.cpu().numpy())
+                        
+                        # Split back into val and shift after PCA
+                        val_pca = embeddings_pca[:n_val]
+                        shift_pca = embeddings_pca[n_val:]
+                        
+                        # Run MMD permutation test
+                        mmd_p = run_mmd_permutation_test(
+                            val_pca,
+                            shift_pca,
+                            structure_permutation_fn=(
+                                embed_patient_permutations if dataset == "Mammo" else None
+                            ),
+                        )
+                        
+                        p_values.append(mmd_p)
+                        successful_bootstraps += 1
+                        
+                        # Count significant detections
+                        if mmd_p < alpha:
+                            significant_detections += 1
+                            
+                    except Exception as e:
+                        print(f"!    Error in bootstrap iteration {bootstrap_iter}: {e}")
+                        continue
+                
+                # Calculate detection rate and statistics
+                if successful_bootstraps > 0:
+                    detection_rate = significant_detections / successful_bootstraps
+                    mean_pvalue = np.mean(p_values)
+                    std_pvalue = np.std(p_values)
+                else:
+                    detection_rate = 0.0
+                    mean_pvalue = 1.0
+                    std_pvalue = 0.0
+                
+                print(f"     Detection rate: {detection_rate:.2f} ({significant_detections}/{successful_bootstraps})")
+                print(f"     Mean p-value: {mean_pvalue:.3f} ± {std_pvalue:.3f}")
+                
+                # Store results
+                results["shift"].append(shift_name)
+                results["layer"].append(layer)
+                results["test_size"].append(shift_subset_size)
+                results["detection_rate"].append(detection_rate)
+                results["mean_pvalue"].append(mean_pvalue)
+                results["std_pvalue"].append(std_pvalue)
+                results["n_successful_bootstraps"].append(successful_bootstraps)
+
+    # Save results to CSV and JSON
+    results_df = pd.DataFrame(results)
+    
+    csv_path = output_dir / f"bootstrap_detection_rates_{dataset}_{encoder_to_evaluate}.csv"
+    json_path = output_dir / f"bootstrap_detection_rates_{dataset}_{encoder_to_evaluate}.json"
+
+    results_df.to_csv(csv_path, index=False)
+    results_dict = results_df.to_dict("records")
+    with open(json_path, "w") as jf:
+        json.dump(results_dict, jf, indent=2)
+    
+    print(f"Results saved to CSV: {csv_path}")
+    print(f"Results saved to JSON: {json_path}")

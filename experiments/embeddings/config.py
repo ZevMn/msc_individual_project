@@ -88,10 +88,10 @@ class Config:
             "csv_files": ("val_embed.csv", "test_embed.csv"),
             "column_map": {
                 "Laterality": "ImageLateralityFinal",
-                "View": "ViewPosition",
+                "Imaging Protocol": "ViewPosition",
                 "Manufacturer": "ManufacturerModelName",
             },
-            "plot_columns": ["Class", "Laterality", "View", "Manufacturer"],
+            "plot_columns": ["Class", "Laterality", "Imaging Protocol", "Manufacturer"],
             "simclr_modality_specific": "run_byatk1eo/best.ckpt",
             "modality_encoder_path": "encoder_byatk1eo.pkl",
         },
@@ -100,16 +100,16 @@ class Config:
             "column_map": {"Site": "site"},
             "plot_columns": ["Class", "Site"],
             "simclr_modality_specific": "run_cwyi1g3d/epoch=449.ckpt",
-            "modality_encoder_path": "encoder_cwyi1g3d.pkl",  ### ?
+            "modality_encoder_path": "encoder_cwyi1g3d/epoch=449.pkl",  ### ?
         },
         "RSNA": {
             "csv_files": ("val_rsna.csv", "test_rsna.csv"),
             "column_map": {
                 "Age": "Patient Age",
                 "Gender": "Patient Gender",
-                "View": "View Position",
+                "Imaging Protocol": "View Position",
             },
-            "plot_columns": ["Class", "Gender", "View"],
+            "plot_columns": ["Class", "Gender", "Imaging Protocol"],
             "simclr_modality_specific": "run_q0kry6pk/best.ckpt",
             "modality_encoder_path": "encoder_q0kry6pk.pkl",
         },
@@ -117,10 +117,10 @@ class Config:
             "csv_files": ("val_padchest.csv", "test_padchest.csv"),
             "column_map": {
                 "Gender": "PatientSex_DICOM",
-                "View": "Projection",
+                "Imaging Protocol": "Projection",
                 "Manufacturer": "Manufacturer",
             },
-            "plot_columns": ["Class", "Gender", "View", "Manufacturer"],
+            "plot_columns": ["Class", "Gender", "Imaging Protocol", "Manufacturer"],
             "simclr_modality_specific": "run_q0kry6pk/best.ckpt",
             "modality_encoder_path": "encoder_q0kry6pk.pkl",
         },
