@@ -13,8 +13,6 @@ from experiments.embeddings.statistical_utils import (
     calculate_detection_rates,
     calculate_bootstrap_detection_rates,
 )
-# from experiments.embeddings.data_processing_utils import subsample_validation_set
-
 
 # -----------------------------------------
 # First experiment called in main execution
@@ -96,24 +94,21 @@ def run_visualisation_experiment(
 # ------------------------------------------
 # Second experiment called in main execution
 # ------------------------------------------
-
-# We have a given dataset and encoder.
-# We want to loop through the different shift scenarios.
-# Ignore mixed shifts. Look at e.g. "acquisition" and "population" shifts.
-# For each type of shift, we want to analyse "subtle", "moderate" and "extreme".
-# -> Produce a table with MMD outputs from each layer of the encoder (and also BBSD on softmax outputs).
-# -> (Make sure to subsample properly - look at Mel's function).
-# -> For each row, output the correct data as a csv/json.
-# -> Create a separate script to run and collect the data and process it into a table.
-# -> Plot this table as a heat map, colour coded by detection rate.
-# Ultimately, we will produce one table for each dataset and encoder.
-# The hypothesis is that different shift types will have different detection rates at different layers.
-# Consider adding other metrics to compare.
-
-
 def run_stats_experiment(
     encoder_to_evaluate: str, feat_mode: str, dataset: str
 ) -> None:
+    # We have a given dataset and encoder.
+    # We want to loop through the different shift scenarios.
+    # Ignore mixed shifts. Look at e.g. "acquisition" and "population" shifts.
+    # For each type of shift, we want to analyse "subtle", "moderate" and "extreme".
+    # -> Produce a table with MMD outputs from each layer of the encoder (and also BBSD on softmax outputs).
+    # -> (Make sure to subsample properly - look at Mel's function).
+    # -> For each row, output the correct data as a csv/json.
+    # -> Create a separate script to run and collect the data and process it into a table.
+    # -> Plot this table as a heat map, colour coded by detection rate.
+    # Ultimately, we will produce one table for each dataset and encoder.
+    # The hypothesis is that different shift types will have different detection rates at different layers.
+    # Consider adding other metrics to compare.
 
     Config.validate()
     Config.set_seeds()
@@ -195,7 +190,6 @@ def run_bootstrap_experiment(
         / "experiments"
         / "outputs"
         / "CollectedBootstrapResults"
-        / encoder_to_evaluate
     )
     output_dir.mkdir(parents=True, exist_ok=True)
 
