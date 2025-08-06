@@ -128,45 +128,27 @@ class Config:
 
     SHIFT_REGISTRY: dict[str, dict[str, Callable]] = {
         "Mammo": {
-            "acq_prev": partial(
-                shift_generator.mammo_acq_prev_shift,
-                target_manufacturer_distribution=np.array(
-                    [0.50, 0.00, 0.00, 0.20, 0.20, 0.10]
-                ),
-                target_density_distribution=np.array([0.15, 0.35, 0.35, 0.15]),
-            ),
-            "acq": partial(
+            "acq_moderate": partial(
                 shift_generator.mammo_acq_prev_shift,
                 target_manufacturer_distribution=np.array(
                     [0.50, 0.00, 0.00, 0.20, 0.20, 0.10]
                 ),
             ),
-            "prev": partial(
+            "prev_moderate": partial(
                 shift_generator.mammo_acq_prev_shift,
                 target_density_distribution=np.array([0.15, 0.35, 0.35, 0.15]),
             ),
         },
         "Retina": {
-            "acq_prev": partial(
-                shift_generator.retina_acq_prev_shift,
-                target_site_distribution=np.array([0.10, 0.20, 0.70]),
-                target_prevalence=0.5,
-            ),
-            "acq": partial(
+            "acq_moderate": partial(
                 shift_generator.retina_acq_prev_shift,
                 target_site_distribution=np.array([0.10, 0.20, 0.70]),
             ),
-            "prev": partial(
+            "prev_moderate": partial(
                 shift_generator.retina_acq_prev_shift, target_prevalence=0.5
             ),
         },
         "RSNA": {
-            # "gender_prev": partial(
-            #     shift_generator.rsna_gender_and_prev_shift,
-            #     target_female_proportion=0.40,
-            #     target_prevalence=0.25,
-            # ),
-            # "prev": partial(shift_generator.rsna_prev_shift, target_prevalence=0.25),
             "gender_subtle": partial(
                 shift_generator.rsna_gender_shift, target_female_proportion=0.40
             ),
@@ -187,11 +169,6 @@ class Config:
             ),
         },
         "PadChest": {
-            # "gender_prev": partial(
-            #     shift_generator.padchest_gender_prev_shift,
-            #     target_disease=0.04,
-            #     target_female_proportion=0.50,
-            # ),
             # Initial: Female 51%, Phillips 42%
             "gender_subtle": partial(
                 shift_generator.padchest_gender_shift, target_female_proportion=0.49
