@@ -14,6 +14,7 @@ from experiments.embeddings.statistical_utils import (
     calculate_bootstrap_detection_rates,
 )
 
+
 # -----------------------------------------
 # First experiment called in main execution
 # -----------------------------------------
@@ -185,12 +186,7 @@ def run_bootstrap_experiment(
     Config.validate()
     Config.set_seeds()
 
-    output_dir = (
-        Config.ROOT
-        / "experiments"
-        / "outputs"
-        / "CollectedBootstrapResults"
-    )
+    output_dir = Config.ROOT / "experiments" / "outputs" / "CollectedBootstrapResults"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print(
@@ -221,9 +217,9 @@ def run_bootstrap_experiment(
 
     # Bootstrap experiment configuration
     bootstrap_config = {
-        'n_bootstrap': 200,
-        'n_val': 2000,
-        'shift_subset_sizes': [100, 250, 500, 1000]
+        "n_bootstrap": 200,
+        "n_val": 2000,
+        "shift_subset_sizes": [100, 250, 500, 1000],
     }
 
     # Calculate bootstrap detection rates for the simulated shifts
@@ -235,7 +231,7 @@ def run_bootstrap_experiment(
         val_embeddings=val_embeddings,
         test_embeddings=test_embeddings,
         shift_to_indices_dict=shift_to_indices_dict,
-        **bootstrap_config
+        **bootstrap_config,
     )
 
     print(f"\n=== BOOTSTRAP CALCULATIONS COMPLETE ===")

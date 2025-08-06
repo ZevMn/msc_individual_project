@@ -460,12 +460,12 @@ def plot_detection_rate_heatmap(
     Generate a heatmap of p-values representing shift detection rates of all simulated
     shifts across encoder layers, with significance marked by an asterisk.
     Expects a CSV named f"{dataset}_{encoder}_stats.csv" in output_dir.
-    
+
     Args:
         output_dir: Directory where the heatmap PNG will be saved.
         dataset: Name of the dataset being analysed.
         encoder_to_evaluate: Name of the encoder used to generate features.
-        
+
     """
 
     set_plot_style()
@@ -518,6 +518,7 @@ def plot_detection_rate_heatmap(
         f"{dataset}_{encoder_to_evaluate}_detection_rate_heatmap",
     )
 
+
 def plot_detection_rate_linegraph(
     output_dir: Path,
     dataset: str,
@@ -527,12 +528,12 @@ def plot_detection_rate_linegraph(
     Generate a line graph of p-values representing shift detection rates of all simulated
     shifts across encoder layers, with significance marked by an asterisk.
     Expects a CSV named f"{dataset}_{encoder}_stats.csv" in output_dir.
-    
+
     Args:
         output_dir: Directory where the heatmap PNG will be saved.
         dataset: Name of the dataset being analysed.
         encoder_to_evaluate: Name of the encoder used to generate features.
-        
+
     """
     set_plot_style()
 
@@ -549,8 +550,9 @@ def plot_detection_rate_linegraph(
     pvals = detection_rate_df[pval_cols]
     sigs = detection_rate_df[sig_cols]
 
-    layers = [col.removesuffix("_pvalue").replace("_", " ").title()
-              for col in pval_cols]
+    layers = [
+        col.removesuffix("_pvalue").replace("_", " ").title() for col in pval_cols
+    ]
     shifts = [idx.replace("_", " ").title() for idx in pvals.index]
 
     # Plot the line graph
@@ -562,17 +564,16 @@ def plot_detection_rate_linegraph(
         for xi, (yi, sig) in enumerate(zip(p_row, s_row)):
             if sig:
                 ax.text(xi, yi + 0.02, "*", ha="center", va="bottom", fontsize=12)
-    
+
     # Axis formatting
     ax.set_xticks(x)
     ax.set_xticklabels(layers, rotation=45, ha="right")
     ax.set_ylabel("p-value", fontsize=12)
     ax.set_xlabel("Encoder Layer / Test", fontsize=12)
     ax.set_ylim(0, 1.05)
-    ax.axhline(0.05, color="red", linestyle="--",
-               label="Significance Threshold (0.05)")
+    ax.axhline(0.05, color="red", linestyle="--", label="Significance Threshold (0.05)")
     ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
- 
+
     title_and_save_fig(
         f"Shift Detection Rate Line Graph: {dataset} | {encoder_to_evaluate.replace('_', ' ').title()}",
         fig,
