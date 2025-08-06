@@ -67,7 +67,7 @@ def run_visualisation_experiment(
     )
 
     # Generate plots
-    inputs = plotting.PlotInputs(
+    inputs = plotting.VisPlotInputs(
         encoder_to_evaluate=encoder_to_evaluate,
         dataset=dataset,
         layers=layers,

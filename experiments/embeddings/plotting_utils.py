@@ -31,35 +31,7 @@ from matplotlib.figure import Figure
 import matplotlib.gridspec as gridspec
 
 from experiments.embeddings.config import Config, PlotConfig
-from experiments.embeddings.statistical_utils import (
-    calculate_PCA_and_tSNE,
-    calculate_all_shift_metrics,
-    save_results,
-)
-
-
-@dataclass
-class PlotInputs:
-    """
-    Container for inputs required by plotting functions.
-
-    Attributes:
-        encoder_to_evaluate: Name of the encoder used to generate features.
-        dataset: Name of the dataset being analysed.
-        layers: Ordered list of layer names to process and plot.
-        val_embeddings: Mapping from layer name to a tensor of validation (source) embeddings.
-        test_embeddings: Mapping from layer name to a tensor of test (target) embeddings.
-        shift_to_indices_dict: Mapping from shift name to a NumPy array of
-            integer indices corresponding to the subset of test embeddings belonging to
-            that covariate shift.
-    """
-
-    encoder_to_evaluate: str
-    dataset: str
-    layers: list[str]
-    val_embeddings: dict[str, torch.Tensor]
-    test_embeddings: dict[str, torch.Tensor]
-    shift_to_indices_dict: dict[str, np.ndarray]
+from experiments.embeddings.statistical_utils import calculate_PCA_and_tSNE
 
 
 # ----------------
@@ -128,6 +100,30 @@ def title_and_save_fig(
 # ------------------
 # Plotting functions
 # ------------------
+@dataclass
+class VisPlotInputs:
+    """
+    Container for inputs required by plotting functions.
+
+    Attributes:
+        encoder_to_evaluate: Name of the encoder used to generate features.
+        dataset: Name of the dataset being analysed.
+        layers: Ordered list of layer names to process and plot.
+        val_embeddings: Mapping from layer name to a tensor of validation (source) embeddings.
+        test_embeddings: Mapping from layer name to a tensor of test (target) embeddings.
+        shift_to_indices_dict: Mapping from shift name to a NumPy array of
+            integer indices corresponding to the subset of test embeddings belonging to
+            that covariate shift.
+    """
+
+    encoder_to_evaluate: str
+    dataset: str
+    layers: list[str]
+    val_embeddings: dict[str, torch.Tensor]
+    test_embeddings: dict[str, torch.Tensor]
+    shift_to_indices_dict: dict[str, np.ndarray]
+
+
 def plot_layer_representation_scatter(
     output_dir: Path,
     encoder_to_evaluate: str,
@@ -225,7 +221,7 @@ def plot_layer_representation_scatter(
 
 def plot_all_layer_representations_scatter(
     output_dir: Path,
-    inputs: PlotInputs,
+    inputs: VisPlotInputs,
     val_labels: dict[str, np.ndarray],
     test_labels: dict[str, np.ndarray],
 ) -> None:
@@ -273,7 +269,7 @@ def plot_all_layer_representations_scatter(
             )
 
 
-def plot_shift_comparison_joint(output_dir: Path, inputs: PlotInputs) -> None:
+def plot_shift_comparison_joint(output_dir: Path, inputs: VisPlotInputs) -> None:
     """
     Create seaborn jointplots (scatter + marginal densities) for PCA and t-SNE.
 
@@ -355,7 +351,7 @@ def plot_shift_comparison_joint(output_dir: Path, inputs: PlotInputs) -> None:
             )
 
 
-def plot_shift_comparison_scatter(output_dir: Path, inputs: PlotInputs) -> None:
+def plot_shift_comparison_scatter(output_dir: Path, inputs: VisPlotInputs) -> None:
     """
     Generate a single figure with a grid of PCA and t-SNE scatterplots per layer
     to compare embedding spaces across layers and shifts.
