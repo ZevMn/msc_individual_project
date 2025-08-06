@@ -66,11 +66,11 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    # print("\nRunning visualisation experiment:\n")
-    # run_visualisation_experiment(args.encoder_to_evaluate, args.feat_mode, args.dataset)
+    print("\nRunning visualisation experiment:\n")
+    run_visualisation_experiment(args.encoder_to_evaluate, args.feat_mode, args.dataset)
 
     # print("\nRunning stats experiment:\n")
     # run_stats_experiment(args.encoder_to_evaluate, args.feat_mode, args.dataset)
 
-    print("Running bootstrap detection rates experiment:\n")
-    run_bootstrap_experiment(args.encoder_to_evaluate, args.feat_mode, args.dataset)
+    # print("Running bootstrap detection rates experiment:\n")
+    # run_bootstrap_experiment(args.encoder_to_evaluate, args.feat_mode, args.dataset)

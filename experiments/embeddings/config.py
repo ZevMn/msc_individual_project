@@ -32,7 +32,7 @@ class PlotConfig:
     ) -> tuple[int, int]:
         if permute:
             n_cols, n_rows = n_rows, n_cols
-        return (PlotConfig.BASE_WIDTH * n_cols, PlotConfig.BASE_HEIGHT_PER_ROW * n_rows)
+        return (PlotConfig.BASE_WIDTH * n_cols + 2, PlotConfig.BASE_HEIGHT_PER_ROW * n_rows)
 
 
 class Config:

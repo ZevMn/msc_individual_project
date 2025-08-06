@@ -75,12 +75,12 @@ def run_visualisation_experiment(
         test_embeddings=test_embeddings,
         shift_to_indices_dict=shift_to_indices_dict,
     )
-
-    plotting.plot_all_layer_representations_scatter(
-        output_dir=output_dir / "layers_representations",
+    
+    plotting.plot_layer_representations_scatter(
+        output_dir=output_dir / "layer_representations",
         inputs=inputs,
-        val_labels=val_labels,
-        test_labels=test_labels,
+        labels=val_labels,
+        shift="no_shift"
     )
     plotting.plot_shift_comparison_joint(
         output_dir=output_dir / "shift_comparison", inputs=inputs

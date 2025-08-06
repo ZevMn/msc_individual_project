@@ -124,149 +124,195 @@ class VisPlotInputs:
     shift_to_indices_dict: dict[str, np.ndarray]
 
 
-def plot_layer_representation_scatter(
+def plot_layer_representations_scatter(
     output_dir: Path,
-    encoder_to_evaluate: str,
-    dataset: str,
-    layer_name: str,
-    layer_embeddings: torch.Tensor,
+    inputs: VisPlotInputs,
     labels: dict[str, np.ndarray],
     shift: str = "no_shift",
     seed: int = Config.SEED,
-    num_samples: int = 2048,
+    num_samples: int = 2000,
 ) -> None:
     """
-    Plots PCA and t-SNE projections for a single layer's embeddings, coloured by
-    each label column (e.g., class, view, laterality, etc).
+    Plots PCA and t-SNE projections for all layers' embeddings, creating separate
+    figures for PCA and t-SNE. Each figure has layers as rows and label types as columns.
 
     Args:
-        output_dir: Directory where the plot PNG will be saved.
+        output_dir: Directory where the plot PNGs will be saved.
         encoder_to_evaluate: Name of the encoder used to generate features.
         dataset: Name of the dataset being analysed.
-        layer_name: Name of the layer of the encoder being plotted.
-        layer_embeddings: Feature embeddings tensor for this layer.
-        labels: Dict mapping column name to a NumPy array (of same length as 'layer_embeddings')
+        layers: Names of the layers of the encoder being plotted.
+        layer_embeddings: Feature embeddings tensor for each layer.
+        labels: Dict mapping column name to a NumPy array (of same length as 'layer_embeddings[layer]')
             with categorical labels to colour points.
-        shift: String identifier for the shift scenario (e.g., "no_shift", "acq").
+        shift: String identifier for the simulated shift (or "no_shift" for reference data).
         seed: Random seed for reproducibility of sampling points for plotting.
         num_samples: Maximum number of points to include in the plot.
     """
     set_plot_style()
 
-    columns = Config.DATASET_CONFIG[dataset]["plot_columns"]
+    columns = Config.DATASET_CONFIG[inputs.dataset]["plot_columns"]
+    n_rows = len(inputs.layers)
+    n_cols = len(columns)
 
-    n_rows = len(columns)
-    fig = plt.figure(figsize=PlotConfig.get_figsize(n_rows), constrained_layout=True)
-    axes = fig.subplots(n_rows, 2)
-
-    # PCA and t-SNE (dimensionality reduction)
-    embeddings_pca, embeddings_tsne = calculate_PCA_and_tSNE(layer_embeddings)
-
-    df = pd.DataFrame(
-        {
-            **{col: labels[col] for col in columns},
-            "PCA 1": embeddings_pca[:, 0],
-            "PCA 2": embeddings_pca[:, 1],
-            "t-SNE 1": embeddings_tsne[:, 0],
-            "t-SNE 2": embeddings_tsne[:, 1],
-        }
-    )
-
-    # Sample for plotting
-    sample = df.sample(n=min(num_samples, len(df)), random_state=seed)
-
-    for i, column in enumerate(columns):
-        # PCA plot (left column)
-        ax_pca = sns.scatterplot(
-            data=sample,
-            x="PCA 1",
-            y="PCA 2",
-            hue=column,
-            palette=PlotConfig.COLOR_PALETTE,
-            alpha=PlotConfig.ALPHA,
-            s=PlotConfig.MARKER_SIZE,
-            ax=axes[i, 0],
-            legend=False,
-        )
-        ax_pca.set_title(f"{column.title()} (PCA)", fontsize=12)
-        ax_pca.set_xlabel("")
-        ax_pca.set_ylabel("")
-
-        # t-SNE plot
-        ax_tsne = sns.scatterplot(
-            data=sample,
-            x="t-SNE 1",
-            y="t-SNE 2",
-            hue=column,
-            palette=PlotConfig.COLOR_PALETTE,
-            alpha=PlotConfig.ALPHA,
-            s=PlotConfig.MARKER_SIZE,
-            ax=axes[i, 1],
-            legend=True,
-        )
-        ax_tsne.set_title(f"{column.title()} (t-SNE)", fontsize=12)
-        ax_tsne.set_xlabel("")
-        ax_tsne.set_ylabel("")
-        sns.move_legend(
-            ax_tsne, loc="upper left", bbox_to_anchor=(1.02, 1), frameon=False
-        )
-
-    title_and_save_fig(
-        f"Feature Representation: {dataset} | {encoder_to_evaluate.title()} | {layer_name.replace('_', ' ').title()} | {shift.replace('_', ' ').title()} Shift",
-        fig,
-        output_dir,
-        f"{dataset}_{encoder_to_evaluate}_{layer_name}_{shift}.png",
-    )
-
-
-def plot_all_layer_representations_scatter(
-    output_dir: Path,
-    inputs: VisPlotInputs,
-    val_labels: dict[str, np.ndarray],
-    test_labels: dict[str, np.ndarray],
-) -> None:
-    """
-    Plot labelled PCA/t-SNE scatterplots for each layer and each shift subset.
-
-    For every layer in inputs.layers:
-        - Plot the full validation set (no shift).
-        - For each shift subset, plot the corresponding test embeddings.
-
-    Args:
-        output_dir: Directory where the plot PNGs will be saved.
-        inputs: A 'PlotInputs' instance.
-        val_labels: Dict of label arrays (same length as validation embeddings).
-        test_labels: Dict of label arrays (same length as test embeddings).
-    """
-
+    # Calculate PCA dimensionality reductions for all layers
+    embeddings_data = {}
     for layer in inputs.layers:
-        print(f"\n--- Processing layer: {layer} ---")
-
-        # Reference data (full val dataset)
-        print("\nProcessing reference data (no shift)...")
-        plot_layer_representation_scatter(
-            output_dir=output_dir,
-            encoder_to_evaluate=inputs.encoder_to_evaluate,
-            dataset=inputs.dataset,
-            layer_name=layer,
-            layer_embeddings=inputs.val_embeddings[layer],
-            labels=val_labels,
-            shift="no_shift",
+        print(f"Processing embeddings for layer: {layer}")
+        embeddings_pca, embeddings_tsne = calculate_PCA_and_tSNE(
+            inputs.val_embeddings[layer]
         )
 
-        # Shifted data (test dataset subsets)
-        for shift_name, idx_array in inputs.shift_to_indices_dict.items():
-            print(f"\nProcessing {shift_name}...")
-            shifted_labels = {k: v[idx_array] for k, v in test_labels.items()}
-            plot_layer_representation_scatter(
-                output_dir=output_dir,
-                encoder_to_evaluate=inputs.encoder_to_evaluate,
-                dataset=inputs.dataset,
-                layer_name=layer,
-                layer_embeddings=inputs.test_embeddings[layer][idx_array],
-                labels=shifted_labels,
-                shift=shift_name,
+        df = pd.DataFrame(
+            {
+                **{col: labels[col] for col in columns},
+                "PCA 1": embeddings_pca[:, 0],
+                "PCA 2": embeddings_pca[:, 1],
+                "t-SNE 1": embeddings_tsne[:, 0],
+                "t-SNE 2": embeddings_tsne[:, 1],
+            }
+        )
+
+        # Sample for plotting
+        embeddings_data[layer] = df.sample(
+            n=min(num_samples, len(df)), random_state=seed
+        )
+
+    main_title = f"{inputs.dataset} | {inputs.encoder_to_evaluate.title()} | {shift.replace('_', ' ').title()} Shift"
+
+    # Create PCA figure
+    print("\nCreating PCA visualization...")
+    fig_pca = plt.figure(
+        figsize=(4 * n_cols, 3 * n_rows + 1), constrained_layout=True
+    )
+
+    # Add main title for PCA
+    fig_pca.suptitle(
+        f"PCA Feature Representation: {main_title}",
+        fontsize=16,
+        fontweight="bold",
+        y=0.98,
+    )
+
+    # Create subplot grid for PCA
+    gs_pca = fig_pca.add_gridspec(n_rows, n_cols, top=0.93, hspace=0.3, wspace=0.4)
+
+    # Plot PCA subplots
+    for row_idx, layer in enumerate(inputs.layers):
+        sample = embeddings_data[layer]
+
+        for col_idx, column in enumerate(columns):
+            ax = fig_pca.add_subplot(gs_pca[row_idx, col_idx])
+
+            sns.scatterplot(
+                data=sample,
+                x="PCA 1",
+                y="PCA 2",
+                hue=column,
+                palette=PlotConfig.COLOR_PALETTE,
+                alpha=PlotConfig.ALPHA,
+                s=PlotConfig.MARKER_SIZE,
+                ax=ax,
+                legend=(row_idx == 0),  # Only show legend in top row
             )
+
+            # Set titles and labels
+            if row_idx == 0:
+                ax.set_title(f"{column}", fontsize=14, fontweight="bold", pad=20)
+
+            if col_idx == 0:
+                ax.set_ylabel(
+                    f"{layer.replace('_', ' ').title()}", fontsize=12, fontweight="bold"
+                )
+            else:
+                ax.set_ylabel("")
+
+            ax.set_xlabel("")
+
+            # Position legend at top of column
+            if row_idx == 0 and ax.get_legend():
+                ax.legend(
+                    loc="upper center",
+                    bbox_to_anchor=(0.5, 1.4),
+                    ncol=min(len(sample[column].unique()), 4),
+                    frameon=False,
+                    fontsize=10,
+                )
+
+    # Save PCA figure
+    pca_filename = f"{inputs.dataset}_{inputs.encoder_to_evaluate}_pca_{shift}.png"
+    fig_pca.savefig(
+        output_dir / pca_filename, dpi=300, bbox_inches="tight", facecolor="white"
+    )
+    plt.close(fig_pca)
+
+    # Create t-SNE figure
+    print("Creating t-SNE visualization...")
+    fig_tsne = plt.figure(figsize=(4 * n_cols, 3 * n_rows + 1), constrained_layout=True)
+
+    # Add main title for t-SNE
+    fig_tsne.suptitle(
+        f"t-SNE Feature Representation: {main_title}",
+        fontsize=16,
+        fontweight="bold",
+        y=0.98,
+    )
+
+    # Create subplot grid for t-SNE
+    gs_tsne = fig_tsne.add_gridspec(
+        n_rows, n_cols, top=0.93, hspace=0.3, wspace=0.4  # Leave space for main title
+    )
+
+    # Plot t-SNE subplots
+    for row_idx, layer in enumerate(inputs.layers):
+        sample = embeddings_data[layer]
+
+        for col_idx, column in enumerate(columns):
+            ax = fig_tsne.add_subplot(gs_tsne[row_idx, col_idx])
+
+            sns.scatterplot(
+                data=sample,
+                x="t-SNE 1",
+                y="t-SNE 2",
+                hue=column,
+                palette=PlotConfig.COLOR_PALETTE,
+                alpha=PlotConfig.ALPHA,
+                s=PlotConfig.MARKER_SIZE,
+                ax=ax,
+                legend=(row_idx == 0),  # Only show legend in top row
+            )
+
+            # Set titles and labels
+            if row_idx == 0:
+                ax.set_title(f"{column}", fontsize=14, fontweight="bold", pad=20)
+
+            if col_idx == 0:
+                ax.set_ylabel(
+                    f"{layer.replace('_', ' ').title()}", fontsize=12, fontweight="bold"
+                )
+            else:
+                ax.set_ylabel("")
+
+            ax.set_xlabel("")
+
+            # Position legend at top of column
+            if row_idx == 0 and ax.get_legend():
+                ax.legend(
+                    loc="upper center",
+                    bbox_to_anchor=(0.5, 1.4),
+                    ncol=min(len(sample[column].unique()), 4),
+                    frameon=False,
+                    fontsize=10,
+                )
+
+    # Save t-SNE figure
+    tsne_filename = f"{inputs.dataset}_{inputs.encoder_to_evaluate}_tsne_{shift}.png"
+    fig_tsne.savefig(
+        output_dir / tsne_filename, dpi=300, bbox_inches="tight", facecolor="white"
+    )
+    plt.close(fig_tsne)
+
+    print(f"Saved PCA plot: {pca_filename}")
+    print(f"Saved t-SNE plot: {tsne_filename}")
 
 
 def plot_shift_comparison_joint(output_dir: Path, inputs: VisPlotInputs) -> None:
