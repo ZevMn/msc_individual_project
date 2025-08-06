@@ -234,4 +234,7 @@ def run_bootstrap_experiment(
         **bootstrap_config,
     )
 
+    # Plot the bootstrap results
+    plotting.plot_all_bootstrap_results(output_dir=output_dir / "Plots")
+
     print(f"\n=== BOOTSTRAP CALCULATIONS COMPLETE ===")

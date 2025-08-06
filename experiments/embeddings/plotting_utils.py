@@ -576,3 +576,196 @@ def plot_detection_rate_linegraph(
         output_dir,
         f"{dataset}_{encoder_to_evaluate}_detection_rate_line_graph",
     )
+
+
+def plot_bootstrap_detection_rates(
+    output_dir: Path,
+    dataset: str,
+    results_df: pd.DataFrame,
+) -> None:
+    """
+    Plot bootstrap detection rates for a given dataset as bar charts.
+
+    Args:
+        output_dir: Directory to save the plot
+        dataset: Name of the dataset to plot results for.
+        results_df: DataFrame containing bootstrap results with columns:
+                   ['dataset', 'shift', 'layer', 'test_size', 'detection_rate', 'encoder', ...]
+    """
+
+    # Get unique values for organizing the plot
+    if "encoder" not in results_df.columns:
+        raise ValueError(
+            "Results DataFrame must contain 'encoder' column for plotting."
+        )
+    encoders = sorted(results_df["encoder"].unique())
+    layers = ["after_maxpool", "layer_1", "layer_2", "layer_3", "final_layer"]
+    shifts = sorted(results_df["shift"].unique())
+    test_sizes = sorted(results_df["test_size"].unique())
+
+    # Create figure and subplots
+    colors = plt.get_cmap("Set3")(np.linspace(0, 1, len(test_sizes)))
+    fig, axes = plt.subplots(len(encoders), len(layers), figsize=(20, 16))
+
+    # Set up bar positioning
+    bar_width = 0.8 / len(test_sizes)
+    shift_positions = np.arange(len(shifts))
+
+    # Plot for each encoder and layer combination
+    for encoder_idx, encoder in enumerate(encoders):
+        for layer_idx, layer in enumerate(layers):
+            ax = axes[encoder_idx, layer_idx]
+
+            # Filter data for this encoder and layer
+            subset = results_df[
+                (results_df["encoder"] == encoder) & (results_df["layer"] == layer)
+            ]
+
+            # Plot bars for each test size
+            for size_idx, test_size in enumerate(test_sizes):
+                size_data = subset[subset["test_size"] == test_size]
+
+                # Get detection rates for each shift (in order)
+                detection_rates = []
+                for shift in shifts:
+                    shift_data = size_data[size_data["shift"] == shift]
+                    if not len(shift_data) > 0:
+                        raise ValueError(
+                            f"No data found for shift '{shift}' with test size '{test_size}' "
+                            f"for encoder '{encoder}' and layer '{layer}'."
+                        )
+                    detection_rates.append(shift_data["detection_rate"].iloc[0])
+
+                # Calculate bar positions
+                bar_positions = (
+                    shift_positions + (size_idx - len(test_sizes) / 2 + 0.5) * bar_width
+                )
+
+                # Plot bars
+                bars = ax.bar(
+                    bar_positions,
+                    detection_rates,
+                    width=bar_width,
+                    color=colors[size_idx],
+                    alpha=0.8,
+                    label=(
+                        f"{test_size} samples"
+                        if encoder_idx == 0 and layer_idx == 0
+                        else ""
+                    ),
+                    edgecolor="black",
+                    linewidth=0.5,
+                )
+
+                # Add value labels on bars if detection rate > 0
+                for bar, rate in zip(bars, detection_rates):
+                    if rate > 0.05:  # Only label if detection rate is substantial
+                        ax.text(
+                            bar.get_x() + bar.get_width() / 2,
+                            bar.get_height() + 0.01,
+                            f"{rate:.2f}",
+                            ha="center",
+                            va="bottom",
+                            fontsize=8,
+                            rotation=0,
+                        )
+
+            ax.set_xlim(-0.5, len(shifts) - 0.5)
+            ax.set_ylim(0, 1.05)
+            ax.set_xticks(shift_positions)
+            ax.set_xticklabels(shifts, rotation=45, ha="right")
+            ax.set_ylabel("Detection Rate" if layer_idx == 0 else "")
+            ax.grid(True, axis="y", alpha=0.3)
+            ax.set_axisbelow(True)
+
+            # Add layer title
+            if encoder_idx == 0:
+                ax.set_title(
+                    layer.replace("_", " ").title(), fontsize=12, fontweight="bold"
+                )
+
+            # Add encoder label on the left
+            if layer_idx == 0:
+                ax.text(
+                    -0.15,
+                    0.5,
+                    encoder,
+                    transform=ax.transAxes,
+                    rotation=90,
+                    ha="center",
+                    va="center",
+                    fontsize=12,
+                    fontweight="bold",
+                )
+
+    # Add main title
+    fig.suptitle(
+        f"{dataset} - Bootstrap Detection Rates", fontsize=16, fontweight="bold", y=0.98
+    )
+
+    # Add shared legend
+    if len(test_sizes) > 1:
+        handles, labels = axes[0, 0].get_legend_handles_labels()
+        fig.legend(
+            handles,
+            labels,
+            loc="upper center",
+            bbox_to_anchor=(0.5, 0.02),
+            ncol=len(test_sizes),
+            frameon=True,
+            fancybox=True,
+            shadow=True,
+        )
+
+    # Save figure if output directory is provided
+    output_dir.mkdir(parents=True, exist_ok=True)
+    file_name = f"bootstrap_detection_rates_{dataset.lower().replace(' ', '_')}.png"
+    filepath = output_dir / file_name
+    fig.savefig(filepath, dpi=400, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    print(f"[Saved] {file_name}\n")
+
+
+def plot_all_bootstrap_results(
+    output_dir: Path,
+) -> None:
+    """
+    Load and plot bootstrap results for all datasets found in results directory.
+
+    Args:
+        output_dir: Directory containing CSV files with bootstrap results.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Find all result files
+    file_pattern = "bootstrap_detection_rates-*.csv"
+    csv_files = list(output_dir.glob(file_pattern))
+    if not csv_files:
+        raise ValueError(
+            f"No files matching pattern '{file_pattern}' found in {output_dir}"
+        )
+
+    all_results_df = pd.DataFrame()
+    for csv_file in csv_files:
+        # Extract dataset and encoder from filename
+        # Assuming format: bootstrap_detection_rates-{dataset}-{encoder}.csv
+        filename_parts = csv_file.stem.split("-")
+        dataset = filename_parts[1]
+        encoder = filename_parts[2]
+
+        try:
+            results_df = pd.read_csv(csv_file)
+            results_df["dataset"] = dataset
+            results_df["encoder"] = encoder
+            all_results_df = pd.concat([all_results_df, results_df], ignore_index=True)
+        except Exception as e:
+            print(f"! Error processing {csv_file}: {e}")
+            continue
+
+    datasets = all_results_df["dataset"].unique()
+    for dataset in datasets:
+        plot_bootstrap_detection_rates(
+            output_dir=output_dir,
+            dataset=dataset,
+            results_df=all_results_df[all_results_df["dataset"] == dataset],
+        )

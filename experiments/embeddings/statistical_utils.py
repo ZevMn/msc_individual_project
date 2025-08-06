@@ -370,10 +370,10 @@ def calculate_bootstrap_detection_rates(
     results_df = pd.DataFrame(results)
 
     csv_path = (
-        output_dir / f"bootstrap_detection_rates_{dataset}_{encoder_to_evaluate}.csv"
+        output_dir / f"bootstrap_detection_rates-{dataset}-{encoder_to_evaluate}.csv"
     )
     json_path = (
-        output_dir / f"bootstrap_detection_rates_{dataset}_{encoder_to_evaluate}.json"
+        output_dir / f"bootstrap_detection_rates-{dataset}-{encoder_to_evaluate}.json"
     )
 
     results_df.to_csv(csv_path, index=False)
