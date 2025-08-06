@@ -581,7 +581,7 @@ def plot_detection_rate_linegraph(
 def plot_bootstrap_detection_rates(
     output_dir: Path,
     dataset: str,
-    results_df: pd.DataFrame,
+    all_results_df: pd.DataFrame,
 ) -> None:
     """
     Plot bootstrap detection rates for a given dataset as bar charts.
@@ -589,19 +589,21 @@ def plot_bootstrap_detection_rates(
     Args:
         output_dir: Directory to save the plot
         dataset: Name of the dataset to plot results for.
-        results_df: DataFrame containing bootstrap results with columns:
-                   ['dataset', 'shift', 'layer', 'test_size', 'detection_rate', 'encoder', ...]
+        all_results_df: DataFrame containing bootstrap results with columns:
+                   ['dataset', 'encoder', 'shift', 'layer', 'test_size', 'detection_rate', ...]
     """
 
+    # Check if required columns are present
+    required = {"encoder", "layer", "shift", "test_size", "detection_rate"}
+    missing = required - set(all_results_df.columns)
+    if missing:
+        raise ValueError(f"Missing columns in all_results_df: {missing}")
+
     # Get unique values for organizing the plot
-    if "encoder" not in results_df.columns:
-        raise ValueError(
-            "Results DataFrame must contain 'encoder' column for plotting."
-        )
-    encoders = sorted(results_df["encoder"].unique())
+    encoders = sorted(all_results_df["encoder"].unique())
     layers = ["after_maxpool", "layer_1", "layer_2", "layer_3", "final_layer"]
-    shifts = sorted(results_df["shift"].unique())
-    test_sizes = sorted(results_df["test_size"].unique())
+    shifts = sorted(all_results_df["shift"].unique())
+    test_sizes = sorted(all_results_df["test_size"].unique())
 
     # Create figure and subplots
     colors = plt.get_cmap("Set3")(np.linspace(0, 1, len(test_sizes)))
@@ -617,8 +619,9 @@ def plot_bootstrap_detection_rates(
             ax = axes[encoder_idx, layer_idx]
 
             # Filter data for this encoder and layer
-            subset = results_df[
-                (results_df["encoder"] == encoder) & (results_df["layer"] == layer)
+            subset = all_results_df[
+                (all_results_df["encoder"] == encoder)
+                & (all_results_df["layer"] == layer)
             ]
 
             # Plot bars for each test size
@@ -719,7 +722,7 @@ def plot_bootstrap_detection_rates(
 
     # Save figure if output directory is provided
     output_dir.mkdir(parents=True, exist_ok=True)
-    file_name = f"bootstrap_detection_rates_{dataset.lower().replace(' ', '_')}.png"
+    file_name = f"bootstrap_detection_rates_{dataset}.png"
     filepath = output_dir / file_name
     fig.savefig(filepath, dpi=400, bbox_inches="tight", facecolor="white")
     plt.close(fig)
@@ -767,5 +770,5 @@ def plot_all_bootstrap_results(
         plot_bootstrap_detection_rates(
             output_dir=output_dir,
             dataset=dataset,
-            results_df=all_results_df[all_results_df["dataset"] == dataset],
+            all_results_df=all_results_df[all_results_df["dataset"] == dataset],
         )
