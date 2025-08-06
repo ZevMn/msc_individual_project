@@ -59,7 +59,7 @@ if __name__ == "__main__":
         choices=list(Config.ENCODERS.keys()),
     )
     parser.add_argument(
-        "--feat_mode", default=FEAT_MODE, choices=Config.FEAT_MODES_MAP.keys()
+        "--feat_mode", default=FEAT_MODE, choices=list(Config.FEAT_MODES_MAP.keys())
     )
     parser.add_argument(
         "--dataset", default=DATASET, choices=list(Config.DATASET_CONFIG.keys())
