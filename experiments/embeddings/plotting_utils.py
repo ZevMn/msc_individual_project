@@ -150,6 +150,9 @@ def plot_layer_representations_scatter(
     """
     set_plot_style()
 
+    output_dir = Config.ROOT / "experiments" / "collected_outputs" / inputs.dataset
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     columns = Config.DATASET_CONFIG[inputs.dataset]["plot_columns"]
     n_rows = len(inputs.layers)
     n_cols = len(columns)
@@ -172,17 +175,22 @@ def plot_layer_representations_scatter(
             }
         )
 
+        if inputs.dataset == "Mammo" and "Manufacturer" in df.columns:
+            # Replace manufacturer names with numbers or they spill over the legend
+            df["Manufacturer"] = df["Manufacturer"].astype("category").cat.codes
+
         # Sample for plotting
         embeddings_data[layer] = df.sample(
             n=min(num_samples, len(df)), random_state=seed
         )
 
-    main_title = f"{inputs.dataset} | {inputs.encoder_to_evaluate.title()} | {shift.replace('_', ' ').title()} Shift"
+    main_title = f"{inputs.dataset} | {inputs.encoder_to_evaluate.title()} | {shift.replace('_', ' ').title()}"
 
     # Create PCA figure
     print("\nCreating PCA visualization...")
     fig_pca = plt.figure(
-        figsize=(4 * n_cols, 3 * n_rows + 1), constrained_layout=True
+        figsize=(4 * n_cols, 3 * n_rows + 2),
+        constrained_layout=True,
     )
 
     # Add main title for PCA
@@ -194,7 +202,9 @@ def plot_layer_representations_scatter(
     )
 
     # Create subplot grid for PCA
-    gs_pca = fig_pca.add_gridspec(n_rows, n_cols, top=0.93, hspace=0.3, wspace=0.4)
+    gs_pca = fig_pca.add_gridspec(
+        n_rows, n_cols, top=0.90, left=0.08, right=0.95, hspace=0.3, wspace=0.4
+    )
 
     # Plot PCA subplots
     for row_idx, layer in enumerate(inputs.layers):
@@ -212,21 +222,8 @@ def plot_layer_representations_scatter(
                 alpha=PlotConfig.ALPHA,
                 s=PlotConfig.MARKER_SIZE,
                 ax=ax,
-                legend=(row_idx == 0),  # Only show legend in top row
+                legend=(row_idx == 0),
             )
-
-            # Set titles and labels
-            if row_idx == 0:
-                ax.set_title(f"{column}", fontsize=14, fontweight="bold", pad=20)
-
-            if col_idx == 0:
-                ax.set_ylabel(
-                    f"{layer.replace('_', ' ').title()}", fontsize=12, fontweight="bold"
-                )
-            else:
-                ax.set_ylabel("")
-
-            ax.set_xlabel("")
 
             # Position legend at top of column
             if row_idx == 0 and ax.get_legend():
@@ -235,8 +232,25 @@ def plot_layer_representations_scatter(
                     bbox_to_anchor=(0.5, 1.4),
                     ncol=min(len(sample[column].unique()), 4),
                     frameon=False,
-                    fontsize=10,
+                    fontsize=9,
                 )
+
+            # Set titles and labels
+            if row_idx == 0:
+                ax.set_title(f"{column}", fontsize=14, fontweight="bold", pad=10)
+
+            if col_idx == 0:
+                ax.set_ylabel(
+                    f"{layer.replace('_', ' ').title()}",
+                    fontsize=12,
+                    fontweight="bold",
+                    labelpad=10,
+                )
+            else:
+                ax.set_ylabel("")
+            ax.set_xlabel("")
+
+    plt.tight_layout()
 
     # Save PCA figure
     pca_filename = f"{inputs.dataset}_{inputs.encoder_to_evaluate}_pca_{shift}.png"
@@ -245,9 +259,11 @@ def plot_layer_representations_scatter(
     )
     plt.close(fig_pca)
 
+    print(f"[Saved] {pca_filename}\n")
+
     # Create t-SNE figure
     print("Creating t-SNE visualization...")
-    fig_tsne = plt.figure(figsize=(4 * n_cols, 3 * n_rows + 1), constrained_layout=True)
+    fig_tsne = plt.figure(figsize=(4 * n_cols, 3 * n_rows + 2), constrained_layout=True)
 
     # Add main title for t-SNE
     fig_tsne.suptitle(
@@ -259,7 +275,7 @@ def plot_layer_representations_scatter(
 
     # Create subplot grid for t-SNE
     gs_tsne = fig_tsne.add_gridspec(
-        n_rows, n_cols, top=0.93, hspace=0.3, wspace=0.4  # Leave space for main title
+        n_rows, n_cols, top=0.90, left=0.08, right=0.95, hspace=0.3, wspace=0.4
     )
 
     # Plot t-SNE subplots
@@ -278,21 +294,8 @@ def plot_layer_representations_scatter(
                 alpha=PlotConfig.ALPHA,
                 s=PlotConfig.MARKER_SIZE,
                 ax=ax,
-                legend=(row_idx == 0),  # Only show legend in top row
+                legend=(row_idx == 0),
             )
-
-            # Set titles and labels
-            if row_idx == 0:
-                ax.set_title(f"{column}", fontsize=14, fontweight="bold", pad=20)
-
-            if col_idx == 0:
-                ax.set_ylabel(
-                    f"{layer.replace('_', ' ').title()}", fontsize=12, fontweight="bold"
-                )
-            else:
-                ax.set_ylabel("")
-
-            ax.set_xlabel("")
 
             # Position legend at top of column
             if row_idx == 0 and ax.get_legend():
@@ -301,8 +304,25 @@ def plot_layer_representations_scatter(
                     bbox_to_anchor=(0.5, 1.4),
                     ncol=min(len(sample[column].unique()), 4),
                     frameon=False,
-                    fontsize=10,
+                    fontsize=9,
                 )
+
+            # Set titles and labels
+            if row_idx == 0:
+                ax.set_title(f"{column}", fontsize=14, fontweight="bold", pad=10)
+
+            if col_idx == 0:
+                ax.set_ylabel(
+                    f"{layer.replace('_', ' ').title()}",
+                    fontsize=12,
+                    fontweight="bold",
+                    labelpad=10,
+                )
+            else:
+                ax.set_ylabel("")
+            ax.set_xlabel("")
+
+    plt.tight_layout()
 
     # Save t-SNE figure
     tsne_filename = f"{inputs.dataset}_{inputs.encoder_to_evaluate}_tsne_{shift}.png"
@@ -311,8 +331,7 @@ def plot_layer_representations_scatter(
     )
     plt.close(fig_tsne)
 
-    print(f"Saved PCA plot: {pca_filename}")
-    print(f"Saved t-SNE plot: {tsne_filename}")
+    print(f"[Saved] {tsne_filename}\n")
 
 
 def plot_shift_comparison_joint(output_dir: Path, inputs: VisPlotInputs) -> None:
@@ -397,12 +416,17 @@ def plot_shift_comparison_joint(output_dir: Path, inputs: VisPlotInputs) -> None
             )
 
 
-def plot_shift_comparison_scatter(output_dir: Path, inputs: VisPlotInputs) -> None:
+def plot_shift_comparison_scatter(
+    output_dir: Path, inputs: VisPlotInputs, n_samples=2000
+) -> None:
     """
     Generate a single figure with a grid of PCA and t-SNE scatterplots per layer
     to compare embedding spaces across layers and shifts.
     """
     set_plot_style()
+
+    output_dir = Config.ROOT / "experiments" / "collected_outputs" / inputs.dataset
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     n_layers = len(inputs.layers)
     fig = plt.figure(figsize=PlotConfig.get_figsize(n_layers, permute=True))
@@ -412,10 +436,15 @@ def plot_shift_comparison_scatter(output_dir: Path, inputs: VisPlotInputs) -> No
 
     for i, layer in enumerate(inputs.layers):
 
+        moderate_shifts_dict = {}
+        for shift in inputs.shift_to_indices_dict.keys():
+            if "moderate" in shift:
+                moderate_shifts_dict[shift] = inputs.shift_to_indices_dict[shift]
+
         cat_embeddings, shift_labels = concat_embeddings(
             val_embeddings_layer=inputs.val_embeddings[layer],
             test_embeddings_layer=inputs.test_embeddings[layer],
-            shift_to_indices_dict=inputs.shift_to_indices_dict,
+            shift_to_indices_dict=moderate_shifts_dict,
         )
         embeddings_pca, embeddings_tsne = calculate_PCA_and_tSNE(cat_embeddings)
 
@@ -429,7 +458,7 @@ def plot_shift_comparison_scatter(output_dir: Path, inputs: VisPlotInputs) -> No
             }
         )
         df = df.sample(frac=1)  # Shuffle data for unbiased visualisation
-        sample = df.sample(n=min(2048, len(df)))
+        sample = df.sample(n=min(n_samples, len(df)))
 
         clean_layer = layer.replace("_", " ").title()
 
@@ -447,7 +476,7 @@ def plot_shift_comparison_scatter(output_dir: Path, inputs: VisPlotInputs) -> No
             ax=ax_pca,
             legend="brief",
         )
-        ax_pca.set_title(f"{clean_layer} (PCA)", fontsize=11)
+        ax_pca.set_title(f"{clean_layer} (PCA)", fontsize=11, fontweight="bold")
         ax_pca.set_xlabel("")
         ax_pca.set_ylabel("")
 
@@ -470,19 +499,23 @@ def plot_shift_comparison_scatter(output_dir: Path, inputs: VisPlotInputs) -> No
             ax=ax_tsne,
             legend=False,
         )
-        ax_tsne.set_title(f"{clean_layer} (t-SNE)", fontsize=11)
+        ax_tsne.set_title(f"{clean_layer} (t-SNE)", fontsize=11, fontweight="bold")
         ax_tsne.set_xlabel("")
         ax_tsne.set_ylabel("")
 
     if handles_legend and labels_legend and len(labels_legend) > 0:
+        fig.subplots_adjust(top=0.88)
         fig.legend(
             handles_legend,
             labels_legend,
             loc="upper center",
             ncol=len(labels_legend),
             frameon=False,
-            bbox_to_anchor=(0.8, 0.99),
+            bbox_to_anchor=(0.5, 0.95),
             bbox_transform=fig.transFigure,
+            fontsize=10,
+            columnspacing=1.0,
+            handletextpad=0.5,
         )
 
     title_and_save_fig(

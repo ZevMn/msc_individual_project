@@ -76,16 +76,19 @@ def run_visualisation_experiment(
         shift_to_indices_dict=shift_to_indices_dict,
     )
     
+    # Experiment 1: Visualisation of embeddings
     plotting.plot_layer_representations_scatter(
         output_dir=output_dir / "layer_representations",
         inputs=inputs,
         labels=val_labels,
         shift="no_shift"
     )
-    plotting.plot_shift_comparison_joint(
+
+    # Experiment 2: Visualisation of shifts
+    plotting.plot_shift_comparison_scatter(
         output_dir=output_dir / "shift_comparison", inputs=inputs
     )
-    plotting.plot_shift_comparison_scatter(
+    plotting.plot_shift_comparison_joint(
         output_dir=output_dir / "shift_comparison", inputs=inputs
     )
 
@@ -164,6 +167,7 @@ def run_stats_experiment(
         shift_to_indices_dict=shift_to_indices_dict,
     )
 
+    # Experiment 3: Initial investigation into detection rates
     plotting.plot_detection_rate_heatmap(
         output_dir=output_dir, dataset=dataset, encoder_to_evaluate=encoder_to_evaluate
     )
@@ -234,6 +238,7 @@ def run_bootstrap_experiment(
         **bootstrap_config,
     )
 
+    # Experiment 4: Bootstrap detection rates analysis
     # Plot the bootstrap results
     plotting.plot_all_bootstrap_results(output_dir=output_dir / "Plots")
 
