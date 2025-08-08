@@ -181,6 +181,7 @@ cluster/old_log_files/
 cluster/store_log_files.py
 
 # embeddings testing
-experiments/collected_outputs/
 experiments/embeddings/test_embeddings.py
 experiments/embeddings/Test/
+
+experiments/collected_outputs/

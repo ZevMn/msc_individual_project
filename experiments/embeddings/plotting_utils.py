@@ -334,88 +334,6 @@ def plot_layer_representations_scatter(
     print(f"[Saved] {tsne_filename}\n")
 
 
-def plot_shift_comparison_joint(output_dir: Path, inputs: VisPlotInputs) -> None:
-    """
-    Create seaborn jointplots (scatter + marginal densities) for PCA and t-SNE.
-
-    For each layer, validation and shifted subsets are concatenated to share the
-    same PCA/t-SNE space. Two jointplots (PCA and t-SNE), coloured by shift type,
-    are produced per layer.
-
-    Args:
-        output_dir: Directory where the plot PNGs will be saved.
-        inputs: A 'PlotInputs' instance.
-    """
-    set_plot_style()
-
-    for layer in inputs.layers:
-
-        # Concatenate the reference features and shifted features so that they share a PCA space
-        cat_embeddings, shift_labels = concat_embeddings(
-            val_embeddings_layer=inputs.val_embeddings[layer],
-            test_embeddings_layer=inputs.test_embeddings[layer],
-            shift_to_indices_dict=inputs.shift_to_indices_dict,
-        )
-
-        # PCA and t-SNE
-        embeddings_pca, embeddings_tsne = calculate_PCA_and_tSNE(cat_embeddings)
-
-        df = pd.DataFrame(
-            {
-                "Shift": shift_labels,
-                "PCA 1": embeddings_pca[:, 0],
-                "PCA 2": embeddings_pca[:, 1],
-                "t-SNE 1": embeddings_tsne[:, 0],
-                "t-SNE 2": embeddings_tsne[:, 1],
-            }
-        )
-        df = df.sample(frac=1)  # Shuffle data for unbiased visualisation
-        sample = df.sample(n=min(2048, len(df)))
-
-        projections = [("PCA 1", "PCA 2", "PCA"), ("t-SNE 1", "t-SNE 2", "t-SNE")]
-
-        for x, y, title_suffix in projections:
-            graph = sns.jointplot(
-                data=sample,
-                x=x,
-                y=y,
-                hue="Shift",
-                kind="scatter",
-                height=5,
-                ratio=4,
-                space=0,
-                palette=PlotConfig.COLOR_PALETTE,
-                alpha=PlotConfig.ALPHA,
-                s=PlotConfig.MARKER_SIZE,
-                marginal_kws=dict(common_norm=False, fill=True),
-            )
-
-            handles, labels = graph.ax_joint.get_legend_handles_labels()
-
-            if graph.ax_joint.legend_ is not None:
-                graph.ax_joint.legend_.remove()
-
-            graph.figure.legend(
-                handles,
-                labels,
-                title="Shift",
-                loc="upper right",
-                bbox_to_anchor=(1, 0.9),
-                borderaxespad=0.5,
-                frameon=False,
-                fontsize=8,
-                title_fontsize=12,
-            )
-
-            title_and_save_fig(
-                f"Shift Comparison: {inputs.dataset} | {inputs.encoder_to_evaluate.title()} | {layer.replace('_', ' ').title()} | {title_suffix}",
-                graph.figure,
-                output_dir,
-                f"{inputs.dataset}_{inputs.encoder_to_evaluate}_{layer}_{title_suffix}_joint.png",
-                fontsize=12,
-            )
-
-
 def plot_shift_comparison_scatter(
     output_dir: Path, inputs: VisPlotInputs, n_samples=2000
 ) -> None:
@@ -524,6 +442,88 @@ def plot_shift_comparison_scatter(
         output_dir,
         f"{inputs.dataset}_{inputs.encoder_to_evaluate}_shift_comparison_scatter.png",
     )
+
+
+def plot_shift_comparison_joint(output_dir: Path, inputs: VisPlotInputs) -> None:
+    """
+    Create seaborn jointplots (scatter + marginal densities) for PCA and t-SNE.
+
+    For each layer, validation and shifted subsets are concatenated to share the
+    same PCA/t-SNE space. Two jointplots (PCA and t-SNE), coloured by shift type,
+    are produced per layer.
+
+    Args:
+        output_dir: Directory where the plot PNGs will be saved.
+        inputs: A 'PlotInputs' instance.
+    """
+    set_plot_style()
+
+    for layer in inputs.layers:
+
+        # Concatenate the reference features and shifted features so that they share a PCA space
+        cat_embeddings, shift_labels = concat_embeddings(
+            val_embeddings_layer=inputs.val_embeddings[layer],
+            test_embeddings_layer=inputs.test_embeddings[layer],
+            shift_to_indices_dict=inputs.shift_to_indices_dict,
+        )
+
+        # PCA and t-SNE
+        embeddings_pca, embeddings_tsne = calculate_PCA_and_tSNE(cat_embeddings)
+
+        df = pd.DataFrame(
+            {
+                "Shift": shift_labels,
+                "PCA 1": embeddings_pca[:, 0],
+                "PCA 2": embeddings_pca[:, 1],
+                "t-SNE 1": embeddings_tsne[:, 0],
+                "t-SNE 2": embeddings_tsne[:, 1],
+            }
+        )
+        df = df.sample(frac=1)  # Shuffle data for unbiased visualisation
+        sample = df.sample(n=min(2048, len(df)))
+
+        projections = [("PCA 1", "PCA 2", "PCA"), ("t-SNE 1", "t-SNE 2", "t-SNE")]
+
+        for x, y, title_suffix in projections:
+            graph = sns.jointplot(
+                data=sample,
+                x=x,
+                y=y,
+                hue="Shift",
+                kind="scatter",
+                height=5,
+                ratio=4,
+                space=0,
+                palette=PlotConfig.COLOR_PALETTE,
+                alpha=PlotConfig.ALPHA,
+                s=PlotConfig.MARKER_SIZE,
+                marginal_kws=dict(common_norm=False, fill=True),
+            )
+
+            handles, labels = graph.ax_joint.get_legend_handles_labels()
+
+            if graph.ax_joint.legend_ is not None:
+                graph.ax_joint.legend_.remove()
+
+            graph.figure.legend(
+                handles,
+                labels,
+                title="Shift",
+                loc="upper right",
+                bbox_to_anchor=(1, 0.9),
+                borderaxespad=0.5,
+                frameon=False,
+                fontsize=8,
+                title_fontsize=12,
+            )
+
+            title_and_save_fig(
+                f"Shift Comparison: {inputs.dataset} | {inputs.encoder_to_evaluate.title()} | {layer.replace('_', ' ').title()} | {title_suffix}",
+                graph.figure,
+                output_dir,
+                f"{inputs.dataset}_{inputs.encoder_to_evaluate}_{layer}_{title_suffix}_joint.png",
+                fontsize=12,
+            )
 
 
 def plot_detection_rate_heatmap(
@@ -686,7 +686,13 @@ def plot_bootstrap_detection_rates(
 
     # Create figure and subplots
     colors = plt.get_cmap("Set3")(np.linspace(0, 1, len(test_sizes)))
-    fig, axes = plt.subplots(len(encoders), len(layers), figsize=(20, 16))
+    n_encoders = len(encoders)
+    n_layers = len(layers)
+    fig, axes = plt.subplots(n_encoders, n_layers, figsize=(4*n_encoders, 3*n_layers + 2))
+
+    # Handle the case where there's only one encoder - shape (1, n_layers)
+    if len(encoders) == 1:
+        axes = axes.reshape(1, -1)
 
     # Set up bar positioning
     bar_width = 0.8 / len(test_sizes)
@@ -695,6 +701,7 @@ def plot_bootstrap_detection_rates(
     # Plot for each encoder and layer combination
     for encoder_idx, encoder in enumerate(encoders):
         for layer_idx, layer in enumerate(layers):
+            # Account for only one encoder
             ax = axes[encoder_idx, layer_idx]
 
             # Filter data for this encoder and layer
@@ -703,24 +710,29 @@ def plot_bootstrap_detection_rates(
                 & (all_results_df["layer"] == layer)
             ]
 
+            available_test_sizes = sorted(subset["test_size"].unique())
+
             # Plot bars for each test size
-            for size_idx, test_size in enumerate(test_sizes):
+            for size_idx, test_size in enumerate(available_test_sizes):
                 size_data = subset[subset["test_size"] == test_size]
 
                 # Get detection rates for each shift (in order)
                 detection_rates = []
+                valid_shifts_for_size = []
                 for shift in shifts:
                     shift_data = size_data[size_data["shift"] == shift]
-                    if not len(shift_data) > 0:
-                        raise ValueError(
-                            f"No data found for shift '{shift}' with test size '{test_size}' "
-                            f"for encoder '{encoder}' and layer '{layer}'."
-                        )
-                    detection_rates.append(shift_data["detection_rate"].iloc[0])
+                    if len(shift_data) > 0:
+                        detection_rates.append(shift_data["detection_rate"].iloc[0])
+                        valid_shifts_for_size.append(shift)
+                # Skip this test_size if no shifts have data for it
+                if not detection_rates:
+                    continue
 
                 # Calculate bar positions
+                valid_shift_positions = np.arange(len(valid_shifts_for_size))
                 bar_positions = (
-                    shift_positions + (size_idx - len(test_sizes) / 2 + 0.5) * bar_width
+                    valid_shift_positions
+                    + (size_idx - len(test_sizes) / 2 + 0.5) * bar_width
                 )
 
                 # Plot bars
