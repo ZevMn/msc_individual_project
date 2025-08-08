@@ -688,7 +688,7 @@ def plot_bootstrap_detection_rates(
     colors = plt.get_cmap("Set3")(np.linspace(0, 1, len(test_sizes)))
     n_encoders = len(encoders)
     n_layers = len(layers)
-    fig, axes = plt.subplots(n_encoders, n_layers, figsize=(4*n_encoders, 3*n_layers + 2))
+    fig, axes = plt.subplots(n_encoders, n_layers, figsize=(4*n_layers, 3*n_encoders + 2))
 
     # Handle the case where there's only one encoder - shape (1, n_layers)
     if len(encoders) == 1:
