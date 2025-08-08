@@ -77,20 +77,22 @@ def run_visualisation_experiment(
     )
     
     # Experiment 1: Visualisation of embeddings
-    plotting.plot_layer_representations_scatter(
-        output_dir=output_dir / "layer_representations",
-        inputs=inputs,
-        labels=val_labels,
-        shift="no_shift"
-    )
+    # plotting.plot_layer_representations_scatter(
+    #     output_dir=output_dir / "layer_representations",
+    #     inputs=inputs,
+    #     labels=val_labels,
+    #     shift="no_shift"
+    # )
 
-    # Experiment 2: Visualisation of shifts
-    plotting.plot_shift_comparison_scatter(
-        output_dir=output_dir / "shift_comparison", inputs=inputs
-    )
+    # # Experiment 2: Visualisation of shifts
+    # plotting.plot_shift_comparison_scatter(
+    #     output_dir=output_dir / "shift_comparison", inputs=inputs
+    # )
+    output_dir = Config.ROOT / "experiments" / "collected_outputs"
     plotting.plot_shift_comparison_joint(
-        output_dir=output_dir / "shift_comparison", inputs=inputs
+        output_dir=output_dir, inputs=inputs
     )
+    # / "shift_comparison"
 
     print(f"\n=== VISUALIZATION COMPLETE ===")
 

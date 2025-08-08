@@ -27,8 +27,11 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import torch
+from typing import List, Optional
 from matplotlib.figure import Figure
 import matplotlib.gridspec as gridspec
+from matplotlib.axes import Axes
+import matplotlib.lines as mlines
 
 from experiments.embeddings.config import Config, PlotConfig
 from experiments.embeddings.statistical_utils import calculate_PCA_and_tSNE
@@ -444,7 +447,7 @@ def plot_shift_comparison_scatter(
     )
 
 
-def plot_shift_comparison_joint(output_dir: Path, inputs: VisPlotInputs) -> None:
+def single_plot_shift_comparison_joint(output_dir: Path, inputs: VisPlotInputs) -> None:
     """
     Create seaborn jointplots (scatter + marginal densities) for PCA and t-SNE.
 
@@ -524,6 +527,196 @@ def plot_shift_comparison_joint(output_dir: Path, inputs: VisPlotInputs) -> None
                 f"{inputs.dataset}_{inputs.encoder_to_evaluate}_{layer}_{title_suffix}_joint.png",
                 fontsize=12,
             )
+
+
+def plot_shift_comparison_joint(output_dir: Path, inputs: VisPlotInputs) -> None:
+    """
+    Grid of 'jointplot-style' panels (scatter + filled KDE marginals) for PCA and t-SNE.
+    One row per layer, two columns: PCA (left) and t-SNE (right). A single legend is
+    shown above each column (once).
+
+    Preserves the look of the old jointplots:
+      - seaborn scatter with hue="Shift"
+      - filled KDE marginals with common_norm=False (per-class areas aren't normalized)
+      - alpha/marker size/palette taken from PlotConfig
+
+    Saves:  {dataset}-{encoder}-shift_comparison_jointgrid.png
+    """
+    set_plot_style()
+
+    n_rows = len(inputs.layers)
+    n_cols = 2
+    fig = plt.figure(figsize=(6 * n_cols, 4 * n_rows + 2), constrained_layout=False)
+    fig.suptitle(
+        f"Shift Comparison: {inputs.dataset} | {inputs.encoder_to_evaluate.title()}",
+        fontsize=16,
+        fontweight="bold",
+        y=0.98,
+    )
+
+    outer = fig.add_gridspec(
+        nrows=n_rows,
+        ncols=n_cols,
+        left=0.08,
+        right=0.98,
+        top=0.90,
+        bottom=0.04,
+        wspace=0.30,
+        hspace=0.40,
+    )
+
+    top_row_main_axes: List[Optional[Axes]] = [None, None]
+
+    for i, layer in enumerate(inputs.layers):
+        cat_embeddings, shift_labels = concat_embeddings(
+            val_embeddings_layer=inputs.val_embeddings[layer],
+            test_embeddings_layer=inputs.test_embeddings[layer],
+            shift_to_indices_dict=inputs.shift_to_indices_dict,
+        )
+        emb_pca, emb_tsne = calculate_PCA_and_tSNE(cat_embeddings)
+
+        df = pd.DataFrame(
+            {
+                "Shift": shift_labels,
+                "PCA 1": emb_pca[:, 0],
+                "PCA 2": emb_pca[:, 1],
+                "t-SNE 1": emb_tsne[:, 0],
+                "t-SNE 2": emb_tsne[:, 1],
+            }
+        ).sample(frac=1, random_state=42)
+        sample = df.sample(n=min(2000, len(df)), random_state=42)
+
+        unique_shifts = sorted(sample["Shift"].unique())
+        palette = sns.color_palette(
+            PlotConfig.COLOR_PALETTE, n_colors=len(unique_shifts)
+        )
+        pal = {k: v for k, v in zip(unique_shifts, palette)}
+
+        # ---- helper for one panel ----
+        def joint_panel(cell_spec, x_col, y_col,
+                        title_if_top=None, draw_legend=False, show_row_label=True):
+            sub = cell_spec.subgridspec(
+                2, 2, height_ratios=(1, 4), width_ratios=(4, 1),
+                wspace=0.0, hspace=0.0
+            )
+            ax_top = fig.add_subplot(sub[0, 0])
+            ax_main = fig.add_subplot(sub[1, 0])
+            ax_right = fig.add_subplot(sub[1, 1])
+            fig.add_subplot(sub[0, 1]).axis("off")
+
+            # main scatter
+            sns.scatterplot(
+                data=sample,
+                x=x_col,
+                y=y_col,
+                hue="Shift",
+                palette=pal,
+                alpha=PlotConfig.ALPHA,
+                s=PlotConfig.MARKER_SIZE,
+                ax=ax_main,
+                legend=False,
+            )
+
+            # KDE marginals
+            for s in unique_shifts:
+                d = sample[sample["Shift"] == s]
+                sns.kdeplot(
+                    data=d,
+                    x=x_col,
+                    ax=ax_top,
+                    fill=True,
+                    common_norm=False,
+                    alpha=0.35,
+                    linewidth=1,
+                )
+                sns.kdeplot(
+                    data=d,
+                    y=y_col,
+                    ax=ax_right,
+                    fill=True,
+                    common_norm=False,
+                    alpha=0.35,
+                    linewidth=1,
+                )
+
+            # clean marginal axes
+            for a in (ax_top, ax_right):
+                a.set_xticks([])
+                a.set_yticks([])
+                a.set_xlabel("")
+                a.set_ylabel("")
+                sns.despine(ax=a, left=True, bottom=True)
+
+            # axis labels
+            ax_main.set_xlabel("")
+            ax_main.set_ylabel(
+                layer.replace("_", " ").title() if show_row_label else "",
+                fontweight="bold",
+            )
+
+            if title_if_top:
+                ax_main.set_title(title_if_top, fontsize=14, fontweight="bold", y=1.65)
+
+            sns.despine(ax=ax_main)
+
+            if draw_legend:
+                handles, labels = [], []
+                for s in unique_shifts:
+                    h = mlines.Line2D(
+                        [], [],
+                        marker="o",
+                        linestyle="",
+                        markersize=np.sqrt(PlotConfig.MARKER_SIZE),
+                        markerfacecolor=pal[s],
+                        markeredgecolor="none",
+                        alpha=PlotConfig.ALPHA,
+                    )
+                    handles.append(h)
+                    labels.append(s)
+                leg = ax_main.legend(
+                    handles,
+                    labels,
+                    title="Shift",
+                    frameon=False,
+                    loc="lower center",
+                    bbox_to_anchor=(0.5, 1.42),
+                    ncol=min(4, len(labels)),
+                    fontsize=9,
+                    title_fontsize=11,
+                    borderaxespad=0.0,
+                )
+                leg.set_in_layout(False)
+
+            return ax_main
+
+        # left col (PCA)
+        title_left = "PCA" if i == 0 else None
+        ax_main_left = joint_panel(
+            outer[i, 0], "PCA 1", "PCA 2",
+            title_if_top=title_left, draw_legend=(i == 0), show_row_label=True
+        )
+        if i == 0:
+            top_row_main_axes[0] = ax_main_left
+
+        # right col (t-SNE)
+        title_right = "t-SNE" if i == 0 else None
+        ax_main_right = joint_panel(
+            outer[i, 1], "t-SNE 1", "t-SNE 2",
+            title_if_top=title_right, draw_legend=(i == 0), show_row_label=False
+        )
+        if i == 0:
+            top_row_main_axes[1] = ax_main_right
+
+    plt.tight_layout()
+
+    filename = (
+        f"{inputs.dataset}-{inputs.encoder_to_evaluate}-shift_comparison_jointplot.png"
+    )
+    path = output_dir / filename
+    fig.savefig(path, dpi=300, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    print(f"[Saved] {filename}")
+
 
 
 def plot_detection_rate_heatmap(
@@ -688,7 +881,9 @@ def plot_bootstrap_detection_rates(
     colors = plt.get_cmap("Set3")(np.linspace(0, 1, len(test_sizes)))
     n_encoders = len(encoders)
     n_layers = len(layers)
-    fig, axes = plt.subplots(n_encoders, n_layers, figsize=(4*n_layers, 3*n_encoders + 2))
+    fig, axes = plt.subplots(
+        n_encoders, n_layers, figsize=(4 * n_layers, 3 * n_encoders + 2)
+    )
 
     # Handle the case where there's only one encoder - shape (1, n_layers)
     if len(encoders) == 1:
@@ -811,7 +1006,6 @@ def plot_bootstrap_detection_rates(
             shadow=True,
         )
 
-    # Save figure if output directory is provided
     output_dir.mkdir(parents=True, exist_ok=True)
     file_name = f"bootstrap_detection_rates_{dataset}.png"
     filepath = output_dir / file_name
