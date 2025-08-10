@@ -77,22 +77,20 @@ def run_visualisation_experiment(
     )
     
     # Experiment 1: Visualisation of embeddings
-    # plotting.plot_layer_representations_scatter(
-    #     output_dir=output_dir / "layer_representations",
-    #     inputs=inputs,
-    #     labels=val_labels,
-    #     shift="no_shift"
-    # )
-
-    # # Experiment 2: Visualisation of shifts
-    # plotting.plot_shift_comparison_scatter(
-    #     output_dir=output_dir / "shift_comparison", inputs=inputs
-    # )
-    output_dir = Config.ROOT / "experiments" / "collected_outputs"
-    plotting.plot_shift_comparison_joint(
-        output_dir=output_dir, inputs=inputs
+    plotting.plot_layer_representations_scatter(
+        output_dir=output_dir / "layer_representations",
+        inputs=inputs,
+        labels=val_labels,
+        shift="no_shift"
     )
-    # / "shift_comparison"
+
+    # Experiment 2: Visualisation of shifts
+    plotting.plot_shift_comparison_scatter(
+        output_dir=output_dir / "shift_comparison", inputs=inputs
+    )
+    plotting.plot_shift_comparison_joint(
+        output_dir=output_dir / "shift_comparison", inputs=inputs
+    )
 
     print(f"\n=== VISUALIZATION COMPLETE ===")
 
@@ -242,6 +240,6 @@ def run_bootstrap_experiment(
 
     # Experiment 4: Bootstrap detection rates analysis
     # Plot the bootstrap results
-    plotting.plot_all_bootstrap_results(output_dir=output_dir / "Plots")
+    plotting.plot_all_bootstrap_results(output_dir)
 
     print(f"\n=== BOOTSTRAP CALCULATIONS COMPLETE ===")
