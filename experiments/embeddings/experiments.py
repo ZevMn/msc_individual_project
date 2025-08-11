@@ -9,10 +9,7 @@ Example usage:
 from experiments.embeddings.config import Config
 from experiments.embeddings import plotting_utils as plotting
 from experiments.embeddings import data_processing_utils as data_processing
-from experiments.embeddings.statistical_utils import (
-    calculate_detection_rates,
-    calculate_bootstrap_detection_rates,
-)
+from experiments.embeddings import statistical_utils as statistical
 
 
 # -----------------------------------------
@@ -57,7 +54,7 @@ def run_visualisation_experiment(
     )
 
     # Extract plot labels
-    val_labels, test_labels = data_processing.extract_plot_labels(
+    val_labels, _ = data_processing.extract_plot_labels(
         val_df=val_df, test_df=test_df, encoder_output=encoder_output, dataset=dataset
     )
 
@@ -66,30 +63,37 @@ def run_visualisation_experiment(
         dataset=dataset, test_df=test_df
     )
 
-    # Generate plots
-    inputs = plotting.VisPlotInputs(
-        encoder_to_evaluate=encoder_to_evaluate,
-        dataset=dataset,
+    layer_to_results_dict = data_processing.calculate_and_save_layer_pca_and_tsne(
+        output_dir=output_dir,
         layers=layers,
         val_embeddings=val_embeddings,
         test_embeddings=test_embeddings,
         shift_to_indices_dict=shift_to_indices_dict,
+        force_calculation=False,
     )
-    
+
     # Experiment 1: Visualisation of embeddings
     plotting.plot_layer_representations_scatter(
         output_dir=output_dir / "layer_representations",
-        inputs=inputs,
+        dataset=dataset,
+        encoder_to_evaluate=encoder_to_evaluate,
+        layer_to_results_dict=layer_to_results_dict,
         labels=val_labels,
-        shift="no_shift"
+        shift="no_shift",
     )
 
     # Experiment 2: Visualisation of shifts
     plotting.plot_shift_comparison_scatter(
-        output_dir=output_dir / "shift_comparison", inputs=inputs
+        output_dir=output_dir / "shift_comparison",
+        dataset=dataset,
+        encoder_to_evaluate=encoder_to_evaluate,
+        layer_to_results_dict=layer_to_results_dict,
     )
     plotting.plot_shift_comparison_joint(
-        output_dir=output_dir / "shift_comparison", inputs=inputs
+        output_dir=output_dir / "shift_comparison",
+        dataset=dataset,
+        encoder_to_evaluate=encoder_to_evaluate,
+        layer_to_results_dict=layer_to_results_dict,
     )
 
     print(f"\n=== VISUALIZATION COMPLETE ===")
@@ -156,7 +160,7 @@ def run_stats_experiment(
     n_val = val_df.shape[0]
 
     # Calculate shift detection rates for the simulated shifts
-    calculate_detection_rates(
+    statistical.calculate_detection_rates(
         output_dir=output_dir,
         dataset=dataset,
         encoder_to_evaluate=encoder_to_evaluate,
@@ -227,7 +231,7 @@ def run_bootstrap_experiment(
     }
 
     # Calculate bootstrap detection rates for the simulated shifts
-    calculate_bootstrap_detection_rates(
+    statistical.calculate_bootstrap_detection_rates(
         output_dir=output_dir,
         dataset=dataset,
         encoder_to_evaluate=encoder_to_evaluate,

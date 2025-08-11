@@ -32,7 +32,10 @@ class PlotConfig:
     ) -> tuple[int, int]:
         if permute:
             n_cols, n_rows = n_rows, n_cols
-        return (PlotConfig.BASE_WIDTH * n_cols + 2, PlotConfig.BASE_HEIGHT_PER_ROW * n_rows)
+        return (
+            PlotConfig.BASE_WIDTH * n_cols + 2,
+            PlotConfig.BASE_HEIGHT_PER_ROW * n_rows,
+        )
 
 
 class Config:
@@ -90,15 +93,22 @@ class Config:
                 "Laterality": "ImageLateralityFinal",
                 "Imaging Protocol": "ViewPosition",
                 "Manufacturer": "ManufacturerModelName",
+                "Density": "tissueden",
             },
-            "plot_columns": ["Class", "Laterality", "Imaging Protocol", "Manufacturer"],
+            "plot_columns": [
+                "Class",
+                "Laterality",
+                "Imaging Protocol",
+                "Manufacturer",
+                "Density",
+            ],
             "simclr_modality_specific": "run_byatk1eo/best.ckpt",
             "modality_encoder_path": "encoder_byatk1eo.pkl",
         },
         "Retina": {
             "csv_files": ("retina_val.csv", "retina_test.csv"),
-            "column_map": {"Site": "site"},
-            "plot_columns": ["Class", "Site"],
+            "column_map": {"Site": "site", "Diagnosis": "diagnosis"},
+            "plot_columns": ["Class", "Site", "Diagnosis"],
             "simclr_modality_specific": "run_cwyi1g3d/epoch=449.ckpt",
             "modality_encoder_path": "encoder_cwyi1g3d/epoch=449.pkl",  ### ?
         },

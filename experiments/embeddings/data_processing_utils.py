@@ -11,6 +11,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from experiments.embeddings.config import Config
+from experiments.embeddings.statistical_utils import calculate_PCA_and_tSNE
 from experiments.inference_utils import get_or_save_outputs
 
 from data_handling.mammo import EmbedDataset
@@ -304,3 +305,115 @@ def simulate_shifts(dataset: str, test_df: pd.DataFrame) -> dict[str, np.ndarray
         shift_to_indices_dict[shift_name] = df["idx_in_original"].to_numpy()
 
     return shift_to_indices_dict
+
+
+def concat_embeddings(
+    val_embeddings_layer: torch.Tensor,
+    test_embeddings_layer: torch.Tensor,
+    shift_to_indices_dict: dict[str, np.ndarray],
+) -> tuple[torch.Tensor, list[str]]:
+    """
+    Concatenate validation embeddings with each shifted subset of test embeddings.
+
+    Args:
+        val_embeddings_layer: Validation (source) embeddings for a single layer.
+        test_embeddings_layer: Test (target) embeddings for the same layer.
+        shift_to_indices_dict: Mapping from shift name to integer indices
+            selecting rows from 'test_embeddings_layer' to form each shifted subset.
+
+    Returns:
+        A tuple ('cat_embeddings', 'shift_labels') where:
+            'cat_embeddings' is a tensor formed by concatenating validation embeddings
+              with each shifted subset.
+            'shift_labels' is a corresponding list with the string label "no_shift" for
+            validation rows and the shift name for each shifted subset row.
+    """
+    cat_embeddings = [val_embeddings_layer]
+    shift_labels = ["no_shift"] * len(val_embeddings_layer)
+
+    for shift_name, idx_array in shift_to_indices_dict.items():
+        shift_embeddings = test_embeddings_layer[idx_array]
+        cat_embeddings.append(shift_embeddings)
+        shift_labels.extend([shift_name] * len(shift_embeddings))
+
+    return torch.cat(cat_embeddings), shift_labels
+
+
+def calculate_and_save_layer_pca_and_tsne(
+    output_dir: Path,
+    layers: list[str],
+    val_embeddings: dict[str, torch.Tensor],
+    test_embeddings: dict[str, torch.Tensor],
+    shift_to_indices_dict: dict[str, np.ndarray],
+    force_calculation: bool = False,
+) -> dict[str, pd.DataFrame]:
+    """
+    Calculate PCA/t-SNE projections for all layers' embeddings and saves them as a csv.
+
+    Args:
+        output_dir: Directory to save the CSV files.
+        layers: Ordered list of layer names to process and plot.
+        val_embeddings: Mapping from layer name to a tensor of validation (source) embeddings.
+        test_embeddings: Mapping from layer name to a tensor of test (target) embeddings.
+        shift_to_indices_dict: Mapping from shift name to a NumPy array of
+            integer indices corresponding to the subset of test embeddings belonging to
+            that covariate shift.
+        force_calculation: If True, recalculate PCA/t-SNE even if cached files exist.
+
+    Returns:
+        A dictionary mapping layer names to their PCA/t-SNE results as DataFrames.
+
+    Raises:
+        ValueError: If cached CSV files are missing expected columns.
+        IOError: If file operations fail.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    expected_cols = {"Shift", "PCA 1", "PCA 2", "t-SNE 1", "t-SNE 2"}
+    layer_to_results_dict: dict[str, pd.DataFrame] = {}
+
+    # Produce a separate CSV for embeddings from each layer of the encoder
+    for layer in layers:
+        print(f"Processing layer: {layer}")
+
+        csv_path = output_dir / f"{layer}_pca_tsne.csv"
+        use_cached = csv_path.exists() and not force_calculation
+
+        try:
+            if use_cached:
+                print(f"Loading cached PCA/t-SNE results for layer: {layer}")
+                df = pd.read_csv(csv_path)
+                if not expected_cols.issubset(df.columns):
+                    raise ValueError(
+                        f"Cached file '{csv_path}' missing expected columns: "
+                        f"{expected_cols - set(df.columns)}"
+                    )
+            else:
+                print(f"Generating PCA/t-SNE results for layer: {layer}")
+
+                cat_embeddings, shift_labels = concat_embeddings(
+                    val_embeddings_layer=val_embeddings[layer],
+                    test_embeddings_layer=test_embeddings[layer],
+                    shift_to_indices_dict=shift_to_indices_dict,
+                )
+                emb_pca, emb_tsne = calculate_PCA_and_tSNE(cat_embeddings)
+
+                df = pd.DataFrame(
+                    {
+                        "Shift": shift_labels,
+                        "PCA 1": emb_pca[:, 0],
+                        "PCA 2": emb_pca[:, 1],
+                        "t-SNE 1": emb_tsne[:, 0],
+                        "t-SNE 2": emb_tsne[:, 1],
+                    }
+                ).sample(frac=1, random_state=42)
+
+                df.to_csv(csv_path, index=False)
+                print(f"Saved results to: {csv_path}")
+
+            layer_to_results_dict[layer] = df
+
+        except Exception as e:
+            raise IOError(f"Error processing layer {layer}: {e}")
+
+    return layer_to_results_dict

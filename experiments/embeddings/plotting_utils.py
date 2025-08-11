@@ -19,14 +19,12 @@ Typical workflow:
     4. Optionally enable statistical tests via 'calculate_all_shift_metrics'.
 """
 
-from dataclasses import dataclass
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-import torch
 from typing import List, Optional
 from matplotlib.figure import Figure
 import matplotlib.gridspec as gridspec
@@ -34,7 +32,6 @@ from matplotlib.axes import Axes
 import matplotlib.lines as mlines
 
 from experiments.embeddings.config import Config, PlotConfig
-from experiments.embeddings.statistical_utils import calculate_PCA_and_tSNE
 
 
 # ----------------
@@ -46,38 +43,6 @@ def set_plot_style() -> None:
     """
     sns.set_theme(style="white", font_scale=1.2)
     plt.rcParams.update({"font.family": "serif"})
-
-
-def concat_embeddings(
-    val_embeddings_layer: torch.Tensor,
-    test_embeddings_layer: torch.Tensor,
-    shift_to_indices_dict: dict[str, np.ndarray],
-) -> tuple[torch.Tensor, list[str]]:
-    """
-    Concatenate validation embeddings with each shifted subset of test embeddings.
-
-    Args:
-        val_embeddings_layer: Validation (source) embeddings for a single layer.
-        test_embeddings_layer: Test (target) embeddings for the same layer.
-        shift_to_indices_dict: Mapping from shift name to integer indices
-            selecting rows from 'test_embeddings_layer' to form each shifted subset.
-
-    Returns:
-        A tuple ('cat_embeddings', 'shift_labels') where:
-            'cat_embeddings' is a tensor formed by concatenating validation embeddings
-              with each shifted subset.
-            'shift_labels' is a corresponding list with the string label "no_shift" for
-            validation rows and the shift name for each shifted subset row.
-    """
-    cat_embeddings = [val_embeddings_layer]
-    shift_labels = ["no_shift"] * len(val_embeddings_layer)
-
-    for shift_name, idx_array in shift_to_indices_dict.items():
-        shift_embeddings = test_embeddings_layer[idx_array]
-        cat_embeddings.append(shift_embeddings)
-        shift_labels.extend([shift_name] * len(shift_embeddings))
-
-    return torch.cat(cat_embeddings), shift_labels
 
 
 def title_and_save_fig(
@@ -103,33 +68,11 @@ def title_and_save_fig(
 # ------------------
 # Plotting functions
 # ------------------
-@dataclass
-class VisPlotInputs:
-    """
-    Container for inputs required by plotting functions.
-
-    Attributes:
-        encoder_to_evaluate: Name of the encoder used to generate features.
-        dataset: Name of the dataset being analysed.
-        layers: Ordered list of layer names to process and plot.
-        val_embeddings: Mapping from layer name to a tensor of validation (source) embeddings.
-        test_embeddings: Mapping from layer name to a tensor of test (target) embeddings.
-        shift_to_indices_dict: Mapping from shift name to a NumPy array of
-            integer indices corresponding to the subset of test embeddings belonging to
-            that covariate shift.
-    """
-
-    encoder_to_evaluate: str
-    dataset: str
-    layers: list[str]
-    val_embeddings: dict[str, torch.Tensor]
-    test_embeddings: dict[str, torch.Tensor]
-    shift_to_indices_dict: dict[str, np.ndarray]
-
-
 def plot_layer_representations_scatter(
     output_dir: Path,
-    inputs: VisPlotInputs,
+    dataset: str,
+    encoder_to_evaluate: str,
+    layer_to_results_dict: dict[str, pd.DataFrame],
     labels: dict[str, np.ndarray],
     shift: str = "no_shift",
     seed: int = Config.SEED,
@@ -141,10 +84,7 @@ def plot_layer_representations_scatter(
 
     Args:
         output_dir: Directory where the plot PNGs will be saved.
-        encoder_to_evaluate: Name of the encoder used to generate features.
-        dataset: Name of the dataset being analysed.
-        layers: Names of the layers of the encoder being plotted.
-        layer_embeddings: Feature embeddings tensor for each layer.
+        inputs: VisPlotInputs object containing data for plotting.
         labels: Dict mapping column name to a NumPy array (of same length as 'layer_embeddings[layer]')
             with categorical labels to colour points.
         shift: String identifier for the simulated shift (or "no_shift" for reference data).
@@ -153,41 +93,30 @@ def plot_layer_representations_scatter(
     """
     set_plot_style()
 
-    output_dir = Config.ROOT / "experiments" / "collected_outputs" / inputs.dataset
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    columns = Config.DATASET_CONFIG[inputs.dataset]["plot_columns"]
-    n_rows = len(inputs.layers)
+    layers = layer_to_results_dict.keys()
+    columns = Config.DATASET_CONFIG[dataset]["plot_columns"]
+    n_rows = len(layers)
     n_cols = len(columns)
 
-    # Calculate PCA dimensionality reductions for all layers
-    embeddings_data = {}
-    for layer in inputs.layers:
-        print(f"Processing embeddings for layer: {layer}")
-        embeddings_pca, embeddings_tsne = calculate_PCA_and_tSNE(
-            inputs.val_embeddings[layer]
-        )
+    embeddings_data: dict[str, pd.DataFrame] = {}
 
-        df = pd.DataFrame(
-            {
-                **{col: labels[col] for col in columns},
-                "PCA 1": embeddings_pca[:, 0],
-                "PCA 2": embeddings_pca[:, 1],
-                "t-SNE 1": embeddings_tsne[:, 0],
-                "t-SNE 2": embeddings_tsne[:, 1],
-            }
-        )
+    # Build PCA and t-SNE dataframe for plotting for all layers
+    for layer in layers:
+        layer_df = layer_to_results_dict[layer].query("Shift == @shift").copy()
+        if len(layer_df) == 0:
+            raise ValueError(f"No data found for layer {layer}")
+        
+        layer_df = layer_df.assign(**{col: labels[col] for col in columns})
 
-        if inputs.dataset == "Mammo" and "Manufacturer" in df.columns:
+        if dataset == "Mammo" and "Manufacturer" in layer_df.columns:
             # Replace manufacturer names with numbers or they spill over the legend
-            df["Manufacturer"] = df["Manufacturer"].astype("category").cat.codes
-
-        # Sample for plotting
-        embeddings_data[layer] = df.sample(
-            n=min(num_samples, len(df)), random_state=seed
+            layer_df["Manufacturer"] = layer_df["Manufacturer"].astype("category").cat.codes
+        
+        embeddings_data[layer] = layer_df.sample(
+            n=min(num_samples, len(layer_df)), random_state=seed
         )
 
-    main_title = f"{inputs.dataset} | {inputs.encoder_to_evaluate.title()} | {shift.replace('_', ' ').title()}"
+    main_title = f"{dataset} | {encoder_to_evaluate.title()} | {shift.replace('_', ' ').title()}"
 
     # Create PCA figure
     print("\nCreating PCA visualization...")
@@ -210,7 +139,7 @@ def plot_layer_representations_scatter(
     )
 
     # Plot PCA subplots
-    for row_idx, layer in enumerate(inputs.layers):
+    for row_idx, layer in enumerate(layers):
         sample = embeddings_data[layer]
 
         for col_idx, column in enumerate(columns):
@@ -256,7 +185,7 @@ def plot_layer_representations_scatter(
     plt.tight_layout()
 
     # Save PCA figure
-    pca_filename = f"{inputs.dataset}_{inputs.encoder_to_evaluate}_pca_{shift}.png"
+    pca_filename = f"{dataset}_{encoder_to_evaluate}_pca_{shift}.png"
     fig_pca.savefig(
         output_dir / pca_filename, dpi=300, bbox_inches="tight", facecolor="white"
     )
@@ -282,7 +211,7 @@ def plot_layer_representations_scatter(
     )
 
     # Plot t-SNE subplots
-    for row_idx, layer in enumerate(inputs.layers):
+    for row_idx, layer in enumerate(layers):
         sample = embeddings_data[layer]
 
         for col_idx, column in enumerate(columns):
@@ -328,7 +257,7 @@ def plot_layer_representations_scatter(
     plt.tight_layout()
 
     # Save t-SNE figure
-    tsne_filename = f"{inputs.dataset}_{inputs.encoder_to_evaluate}_tsne_{shift}.png"
+    tsne_filename = f"{dataset}_{encoder_to_evaluate}_tsne_{shift}.png"
     fig_tsne.savefig(
         output_dir / tsne_filename, dpi=300, bbox_inches="tight", facecolor="white"
     )
@@ -338,7 +267,11 @@ def plot_layer_representations_scatter(
 
 
 def plot_shift_comparison_scatter(
-    output_dir: Path, inputs: VisPlotInputs, n_samples=2000
+    output_dir: Path,
+    dataset: str,
+    encoder_to_evaluate: str,
+    layer_to_results_dict: dict,
+    n_samples=2000
 ) -> None:
     """
     Generate a single figure with a grid of PCA and t-SNE scatterplots per layer
@@ -346,40 +279,24 @@ def plot_shift_comparison_scatter(
     """
     set_plot_style()
 
-    output_dir = Config.ROOT / "experiments" / "collected_outputs" / inputs.dataset
-    output_dir.mkdir(parents=True, exist_ok=True)
+    layers = layer_to_results_dict.keys()
 
-    n_layers = len(inputs.layers)
+    n_layers = len(layers)
     fig = plt.figure(figsize=PlotConfig.get_figsize(n_layers, permute=True))
     gs = gridspec.GridSpec(2, n_layers, figure=fig, hspace=0.35, wspace=0.25)
 
     handles_legend, labels_legend = None, None
 
-    for i, layer in enumerate(inputs.layers):
+    for i, layer in enumerate(layers):
 
-        moderate_shifts_dict = {}
-        for shift in inputs.shift_to_indices_dict.keys():
-            if "moderate" in shift:
-                moderate_shifts_dict[shift] = inputs.shift_to_indices_dict[shift]
+        layer_df = layer_to_results_dict[layer]
 
-        cat_embeddings, shift_labels = concat_embeddings(
-            val_embeddings_layer=inputs.val_embeddings[layer],
-            test_embeddings_layer=inputs.test_embeddings[layer],
-            shift_to_indices_dict=moderate_shifts_dict,
-        )
-        embeddings_pca, embeddings_tsne = calculate_PCA_and_tSNE(cat_embeddings)
+        # Filter for moderate shifts only
+        moderate_shifts = [shift for shift in layer_df["Shift"].unique() if "moderate" in shift]
+        filtered_shifts_df = layer_df[layer_df["Shift"].isin(moderate_shifts)].copy()
 
-        df = pd.DataFrame(
-            {
-                "Shift": shift_labels,
-                "PCA 1": embeddings_pca[:, 0],
-                "PCA 2": embeddings_pca[:, 1],
-                "t-SNE 1": embeddings_tsne[:, 0],
-                "t-SNE 2": embeddings_tsne[:, 1],
-            }
-        )
-        df = df.sample(frac=1)  # Shuffle data for unbiased visualisation
-        sample = df.sample(n=min(n_samples, len(df)))
+        filtered_shifts_df = filtered_shifts_df.sample(frac=1, random_state=42)
+        sample = filtered_shifts_df.sample(n=min(n_samples, len(filtered_shifts_df)), random_state=42)
 
         clean_layer = layer.replace("_", " ").title()
 
@@ -440,96 +357,91 @@ def plot_shift_comparison_scatter(
         )
 
     title_and_save_fig(
-        f"Shift Comparison: {inputs.dataset} | {inputs.encoder_to_evaluate.title()}",
+        f"Shift Comparison: {dataset} | {encoder_to_evaluate.title()}",
         fig,
         output_dir,
-        f"{inputs.dataset}_{inputs.encoder_to_evaluate}_shift_comparison_scatter.png",
+        f"{dataset}_{encoder_to_evaluate}_shift_comparison_scatter.png",
     )
 
 
-def single_plot_shift_comparison_joint(output_dir: Path, inputs: VisPlotInputs) -> None:
-    """
-    Create seaborn jointplots (scatter + marginal densities) for PCA and t-SNE.
+# def single_plot_shift_comparison_joint(
+#         output_dir: Path,
+#         dataset: str,
+#         encoder_to_evaluate: str,
+#         layer_to_results_dict: dict[str, pd.DataFrame],
+#         n_samples=2000,
+#     ) -> None:
+#     """
+#     Create seaborn jointplots (scatter + marginal densities) for PCA and t-SNE.
 
-    For each layer, validation and shifted subsets are concatenated to share the
-    same PCA/t-SNE space. Two jointplots (PCA and t-SNE), coloured by shift type,
-    are produced per layer.
+#     For each layer, validation and shifted subsets are concatenated to share the
+#     same PCA/t-SNE space. Two jointplots (PCA and t-SNE), coloured by shift type,
+#     are produced per layer.
 
-    Args:
-        output_dir: Directory where the plot PNGs will be saved.
-        inputs: A 'PlotInputs' instance.
-    """
-    set_plot_style()
+#     Args:
+#         output_dir: Directory where the plot PNGs will be saved.
+#         inputs: A 'PlotInputs' instance.
+#     """
+#     set_plot_style()
 
-    for layer in inputs.layers:
+#     layers = layer_to_results_dict.keys()
 
-        # Concatenate the reference features and shifted features so that they share a PCA space
-        cat_embeddings, shift_labels = concat_embeddings(
-            val_embeddings_layer=inputs.val_embeddings[layer],
-            test_embeddings_layer=inputs.test_embeddings[layer],
-            shift_to_indices_dict=inputs.shift_to_indices_dict,
-        )
+#     for layer in layers:
 
-        # PCA and t-SNE
-        embeddings_pca, embeddings_tsne = calculate_PCA_and_tSNE(cat_embeddings)
+#         layer_df = layer_to_results_dict[layer].sample(frac=1)
+#         sample = layer_df.sample(n=min(n_samples, len(layer_df)), random_state=42)
 
-        df = pd.DataFrame(
-            {
-                "Shift": shift_labels,
-                "PCA 1": embeddings_pca[:, 0],
-                "PCA 2": embeddings_pca[:, 1],
-                "t-SNE 1": embeddings_tsne[:, 0],
-                "t-SNE 2": embeddings_tsne[:, 1],
-            }
-        )
-        df = df.sample(frac=1)  # Shuffle data for unbiased visualisation
-        sample = df.sample(n=min(2048, len(df)))
+#         projections = [("PCA 1", "PCA 2", "PCA"), ("t-SNE 1", "t-SNE 2", "t-SNE")]
 
-        projections = [("PCA 1", "PCA 2", "PCA"), ("t-SNE 1", "t-SNE 2", "t-SNE")]
+#         for x, y, title_suffix in projections:
+#             graph = sns.jointplot(
+#                 data=sample,
+#                 x=x,
+#                 y=y,
+#                 hue="Shift",
+#                 kind="scatter",
+#                 height=5,
+#                 ratio=4,
+#                 space=0,
+#                 palette=PlotConfig.COLOR_PALETTE,
+#                 alpha=PlotConfig.ALPHA,
+#                 s=PlotConfig.MARKER_SIZE,
+#                 marginal_kws=dict(common_norm=False, fill=True),
+#             )
 
-        for x, y, title_suffix in projections:
-            graph = sns.jointplot(
-                data=sample,
-                x=x,
-                y=y,
-                hue="Shift",
-                kind="scatter",
-                height=5,
-                ratio=4,
-                space=0,
-                palette=PlotConfig.COLOR_PALETTE,
-                alpha=PlotConfig.ALPHA,
-                s=PlotConfig.MARKER_SIZE,
-                marginal_kws=dict(common_norm=False, fill=True),
-            )
+#             handles, labels = graph.ax_joint.get_legend_handles_labels()
 
-            handles, labels = graph.ax_joint.get_legend_handles_labels()
+#             if graph.ax_joint.legend_ is not None:
+#                 graph.ax_joint.legend_.remove()
 
-            if graph.ax_joint.legend_ is not None:
-                graph.ax_joint.legend_.remove()
+#             graph.figure.legend(
+#                 handles,
+#                 labels,
+#                 title="Shift",
+#                 loc="upper right",
+#                 bbox_to_anchor=(1, 0.9),
+#                 borderaxespad=0.5,
+#                 frameon=False,
+#                 fontsize=8,
+#                 title_fontsize=12,
+#             )
 
-            graph.figure.legend(
-                handles,
-                labels,
-                title="Shift",
-                loc="upper right",
-                bbox_to_anchor=(1, 0.9),
-                borderaxespad=0.5,
-                frameon=False,
-                fontsize=8,
-                title_fontsize=12,
-            )
-
-            title_and_save_fig(
-                f"Shift Comparison: {inputs.dataset} | {inputs.encoder_to_evaluate.title()} | {layer.replace('_', ' ').title()} | {title_suffix}",
-                graph.figure,
-                output_dir,
-                f"{inputs.dataset}_{inputs.encoder_to_evaluate}_{layer}_{title_suffix}_joint.png",
-                fontsize=12,
-            )
+#             title_and_save_fig(
+#                 f"Shift Comparison: {dataset} | {encoder_to_evaluate.title()} | {layer.replace('_', ' ').title()} | {title_suffix}",
+#                 graph.figure,
+#                 output_dir,
+#                 f"{dataset}_{encoder_to_evaluate}_{layer}_{title_suffix}_joint.png",
+#                 fontsize=12,
+#             )
 
 
-def plot_shift_comparison_joint(output_dir: Path, inputs: VisPlotInputs) -> None:
+def plot_shift_comparison_joint(
+        output_dir: Path,
+        dataset: str,
+        encoder_to_evaluate: str,
+        layer_to_results_dict: dict[str, pd.DataFrame],
+        n_samples=2000
+    ) -> None:
     """
     Grid of 'jointplot-style' panels (scatter + filled KDE marginals) for PCA and t-SNE.
     One row per layer, two columns: PCA (left) and t-SNE (right). A single legend is
@@ -544,11 +456,13 @@ def plot_shift_comparison_joint(output_dir: Path, inputs: VisPlotInputs) -> None
     """
     set_plot_style()
 
-    n_rows = len(inputs.layers)
+    layers = layer_to_results_dict.keys()
+    n_rows = len(layers)
     n_cols = 2
+
     fig = plt.figure(figsize=(6 * n_cols, 4 * n_rows + 2), constrained_layout=False)
     fig.suptitle(
-        f"Shift Comparison: {inputs.dataset} | {inputs.encoder_to_evaluate.title()}",
+        f"Shift Comparison: {dataset} | {encoder_to_evaluate.title()}",
         fontsize=16,
         fontweight="bold",
         y=0.98,
@@ -567,24 +481,10 @@ def plot_shift_comparison_joint(output_dir: Path, inputs: VisPlotInputs) -> None
 
     top_row_main_axes: List[Optional[Axes]] = [None, None]
 
-    for i, layer in enumerate(inputs.layers):
-        cat_embeddings, shift_labels = concat_embeddings(
-            val_embeddings_layer=inputs.val_embeddings[layer],
-            test_embeddings_layer=inputs.test_embeddings[layer],
-            shift_to_indices_dict=inputs.shift_to_indices_dict,
-        )
-        emb_pca, emb_tsne = calculate_PCA_and_tSNE(cat_embeddings)
+    for i, layer in enumerate(layers):
 
-        df = pd.DataFrame(
-            {
-                "Shift": shift_labels,
-                "PCA 1": emb_pca[:, 0],
-                "PCA 2": emb_pca[:, 1],
-                "t-SNE 1": emb_tsne[:, 0],
-                "t-SNE 2": emb_tsne[:, 1],
-            }
-        ).sample(frac=1, random_state=42)
-        sample = df.sample(n=min(2000, len(df)), random_state=42)
+        layer_df = layer_to_results_dict[layer].sample(frac=1)
+        sample = layer_df.sample(n=min(n_samples, len(layer_df)), random_state=42)
 
         unique_shifts = sorted(sample["Shift"].unique())
         palette = sns.color_palette(
@@ -710,13 +610,12 @@ def plot_shift_comparison_joint(output_dir: Path, inputs: VisPlotInputs) -> None
     plt.tight_layout()
 
     filename = (
-        f"{inputs.dataset}-{inputs.encoder_to_evaluate}-shift_comparison_jointplot.png"
+        f"{dataset}-{encoder_to_evaluate}-shift_comparison_jointplot.png"
     )
     path = output_dir / filename
     fig.savefig(path, dpi=300, bbox_inches="tight", facecolor="white")
     plt.close(fig)
     print(f"[Saved] {filename}")
-
 
 
 def plot_detection_rate_heatmap(
