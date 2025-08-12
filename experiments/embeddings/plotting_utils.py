@@ -19,8 +19,10 @@ Typical workflow:
     4. Optionally enable statistical tests via 'calculate_all_shift_metrics'.
 """
 
+import os
 from pathlib import Path
 
+import math
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -76,7 +78,7 @@ def plot_layer_representations_scatter(
     labels: dict[str, np.ndarray],
     shift: str = "no_shift",
     seed: int = Config.SEED,
-    num_samples: int = 2000,
+    n_samples: int = 2000,
 ) -> None:
     """
     Plots PCA and t-SNE projections for all layers' embeddings, creating separate
@@ -89,7 +91,7 @@ def plot_layer_representations_scatter(
             with categorical labels to colour points.
         shift: String identifier for the simulated shift (or "no_shift" for reference data).
         seed: Random seed for reproducibility of sampling points for plotting.
-        num_samples: Maximum number of points to include in the plot.
+        n_samples: Maximum number of points to include in the plot.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -117,7 +119,7 @@ def plot_layer_representations_scatter(
             )
 
         embeddings_data[layer] = layer_df.sample(
-            n=min(num_samples, len(layer_df)), random_state=seed
+            n=min(n_samples, len(layer_df)), random_state=seed
         )
 
     main_title = (
@@ -914,3 +916,49 @@ def plot_all_bootstrap_results(
             dataset=dataset,
             all_results_df=all_results_df[all_results_df["dataset"] == dataset],
         )
+
+
+def plot_kl_linegraph(
+    output_dir: Path, dataset: str, encoder_to_evaluate: str, kl_divs: dict[str, float]
+) -> None:
+    """
+    Plot a line graph of KL divergences across shifts.
+
+    Args:
+        dataset: Name of the dataset to plot results for.
+        encoder_to_evaluate: Name of the encoder to plot results for.
+        kl_divs: Mapping {shift_name: kl_divergence_value}.
+    """
+
+    if not kl_divs:
+        raise ValueError("kl_divs is empty; nothing to plot.")
+
+    # Preserve insertion order
+    items = list(kl_divs.items())
+    labels = [k for k, _ in items]
+    values = [
+        (
+            float(v)
+            if v is not None and not (isinstance(v, float) and math.isnan(v))
+            else float("nan")
+        )
+        for _, v in items
+    ]
+
+    # Figure
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+    ax.plot(range(len(values)), values, marker="o", linewidth=2)
+    ax.set_xticks(range(len(labels)))
+    ax.set_xticklabels(labels, rotation=30, ha="right")
+    ax.set_ylabel("KL Divergence")
+    ax.set_title(f"KL Divergence by Shift — {dataset} | {encoder_to_evaluate}")
+    ax.grid(True, linestyle="--", alpha=0.4)
+
+    # Tidy layout
+    fig.tight_layout()
+
+    file_name = f"{dataset}-{encoder_to_evaluate}-kl_linegraph.png"
+    filepath = output_dir / file_name
+    fig.savefig(filepath, dpi=400, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    print(f"[Saved] {file_name}\n")

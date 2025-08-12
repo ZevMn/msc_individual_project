@@ -37,7 +37,7 @@ def get_or_save_outputs(
     val_loader, 
     test_loader, 
     dataset_name,
-    feat_mode: str  # options: "final", "early", "all"
+    feat_mode: str="all"  # options: "final", "early", "all"
 ):
     """
     Inference loop. If already saved simply returns dictionary of outputs.

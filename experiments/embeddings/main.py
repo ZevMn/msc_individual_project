@@ -37,8 +37,9 @@ import argparse
 from experiments.embeddings.config import Config
 from experiments.embeddings.experiments import (
     run_visualisation_experiment,
-    run_stats_experiment,
+    run_detection_rate_experiment,
     run_bootstrap_experiment,
+    run_shift_quantification_experiment,
 )
 
 # --------- Defaults ----------
@@ -72,11 +73,16 @@ if __name__ == "__main__":
     )
 
     print("\nRunning stats experiment:\n")
-    run_stats_experiment(
+    run_detection_rate_experiment(
         args.encoder_to_evaluate, args.feat_mode, args.dataset, force_calculations=True
     )
 
     print("Running bootstrap detection rates experiment:\n")
     run_bootstrap_experiment(
         args.encoder_to_evaluate, args.feat_mode, args.dataset, force_calculations=True
+    )
+
+    print("Running shift quantification experiment:\n")
+    run_shift_quantification_experiment(
+        args.encoder_to_evaluate, args.feat_mode, args.dataset
     )

@@ -30,7 +30,7 @@ def run_visualisation_experiment(
         / "experiments"
         / "outputs"
         / dataset
-        / "Plots"
+        / "Visualisations"
         / encoder_to_evaluate
     )
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -105,7 +105,7 @@ def run_visualisation_experiment(
 # ------------------------------------------
 # Second experiment called in main execution
 # ------------------------------------------
-def run_stats_experiment(
+def run_detection_rate_experiment(
     encoder_to_evaluate: str,
     feat_mode: str,
     dataset: str,
@@ -132,7 +132,7 @@ def run_stats_experiment(
         / "experiments"
         / "outputs"
         / dataset
-        / "Stats"
+        / "DetectionRates"
         / encoder_to_evaluate
     )
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -258,3 +258,64 @@ def run_bootstrap_experiment(
     plotting.plot_all_bootstrap_results(output_dir)
 
     print(f"\n=== BOOTSTRAP CALCULATIONS COMPLETE ===\n")
+
+
+# ------------------------------------------
+# Fourth experiment called in main execution
+# ------------------------------------------
+def run_shift_quantification_experiment(
+    encoder_to_evaluate: str,
+    feat_mode: str,
+    dataset: str,
+) -> None:
+
+    Config.validate()
+    Config.set_seeds()
+
+    output_dir = Config.ROOT / "experiments" / "outputs" / "ShiftQuantification"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    print(
+        f"\n=== {dataset.upper()} | {encoder_to_evaluate.upper()} | {feat_mode.upper()} ===\n"
+    )
+
+    # Process test and val CSVs
+    val_df, test_df = data_processing.load_csvs_and_add_idx_column(dataset=dataset)
+
+    # Generate or load embeddings
+    encoder_output = data_processing.generate_and_load_embeddings(
+        encoder_to_evaluate=encoder_to_evaluate,
+        feat_mode=feat_mode,
+        dataset=dataset,
+        val_df=val_df,
+        test_df=test_df,
+    )
+
+    # Validate the embeddings output and extract layers, and val/test splits
+    _, val_embeddings, test_embeddings = (
+        data_processing.validate_and_process_embeddings(encoder_output=encoder_output)
+    )
+
+    # Generate covariate-shifted test subsets and store their original indices
+    shift_to_indices_dict = data_processing.simulate_shifts(
+        dataset=dataset, test_df=test_df
+    )
+
+    kl_divs: dict[str, float] = {}
+    early_val = val_embeddings["after_maxpool"]
+    for shift_name, shift_indices in shift_to_indices_dict.items():
+        early_test = test_embeddings["after_maxpool"][shift_indices]
+        kl_divs[shift_name] = statistical.kl_divergence(early_val, early_test)
+
+    plotting.plot_kl_linegraph(
+        output_dir=output_dir,
+        dataset=dataset,
+        encoder_to_evaluate=encoder_to_evaluate,
+        kl_divs=kl_divs
+    )
+
+    ### For a range of simulated shifts, calculate KL-divergence.
+    ### Generate a line graph of metric vs shift inputs.
+    ### Determine cutoffs for 'subtle', 'moderate' and 'extreme' magnitudes.
+
+

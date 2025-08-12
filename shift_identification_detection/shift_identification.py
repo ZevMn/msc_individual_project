@@ -67,7 +67,9 @@ def identify_shift(
 
 def run_shift_identification(
     task_output,
-    encoder_output,
+    encoder_output: dict[
+        str, dict[str, torch.Tensor]
+    ],  # keys: "val" or "test", vals: "after_maxpool", ..., "final_layer", "y"
     idx_shifted,
     val_idx,
     num_classes=2,
@@ -87,17 +89,29 @@ def run_shift_identification(
     """
     y_val = task_output["val"]["y"]
     n_val = y_val.shape[0]
-    encoder_feats_val = encoder_output["val"]["feats"][val_idx]
+
+    from experiments.embeddings.data_processing_utils import (
+        validate_and_process_embeddings,
+    )
+
+    layers, val_embeddings, test_embeddings = validate_and_process_embeddings(
+        encoder_output=encoder_output
+    )
+    # NB: Add my shift generating function in as replacement
+    # Iterate through the layers?
+
+    encoder_feats_val = val_embeddings["final_layer"][val_idx]
     probas_val = task_output["val"]["probas"][val_idx] + 1e-16
     y_val = y_val[val_idx]
-    encoder_feats_test = encoder_output["test"]["feats"][idx_shifted]
+    encoder_feats_test = test_embeddings["final_layer"][idx_shifted]
     probas_test = task_output["test"]["probas"][idx_shifted] + 1e-16
+
     assert (
         task_output["test"]["probas"].shape[0]
-        == encoder_output["test"]["feats"].shape[0]
+        == test_embeddings["final_layer"].shape[0]
     )
     assert (
-        task_output["val"]["probas"].shape[0] == encoder_output["val"]["feats"].shape[0]
+        task_output["val"]["probas"].shape[0] == val_embeddings["final_layer"].shape[0]
     )
     n_val = encoder_feats_val.shape[0]
 
@@ -203,7 +217,7 @@ def run_multi_detection_identification(
 
     Args:
     task_outputs:               dict of task model outputs as returned by `get_or_save_outputs`. Should have both
-                                val and test results. Used by BBSd test.
+                                val and test results. Used by BBSD test.
     `encoder_output`:               dict of encoder outputs as returned by `get_or_save_outputs`. Should have both
                                 val and test results. Used by MMD test.
         shift_generating_func:  function that takes test_set size as argument and generates a resampled
