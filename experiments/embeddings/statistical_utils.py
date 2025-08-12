@@ -131,10 +131,10 @@ def calculate_detection_rates(
     val_embeddings: dict[str, torch.Tensor],
     test_embeddings: dict[str, torch.Tensor],
     shift_to_indices_dict: dict[str, np.ndarray],
-    force_calculations: bool=False,
+    force_calculations: bool = False,
 ) -> list[ShiftTestResult]:
     """
-    Calculate detection rates for a number of simulated covariate shifts, 
+    Calculate detection rates for a number of simulated covariate shifts,
     with optional caching.
 
     Args:
@@ -158,8 +158,8 @@ def calculate_detection_rates(
         try:
             with open(json_path, "r") as jf:
                 cached_data = json.load(jf)
-            
-            cached_shifts = {item['shift'] for item in cached_data}
+
+            cached_shifts = {item["shift"] for item in cached_data}
             required_shifts = set(shift_to_indices_dict.keys())
 
             if cached_shifts == required_shifts:
@@ -247,7 +247,7 @@ def calculate_detection_rates(
     print("\nCalculations complete.")
     print(f"[Saved] JSON: {json_path}")
     print(f"[Saved] CSV: {csv_path}")
-    
+
     return results
 
 
@@ -262,7 +262,7 @@ def calculate_bootstrap_detection_rates(
     n_bootstrap: int,
     n_val: int,
     shift_subset_sizes: list[int],
-    force_calculations: bool=False,
+    force_calculations: bool = False,
 ) -> None:
     """
     Calculate bootstrap detection rates for each shift, layer, and test subset size,
@@ -304,7 +304,7 @@ def calculate_bootstrap_detection_rates(
             with open(json_path, "r") as jf:
                 existing_results = json.load(jf)
             completed_combinations = {
-                (item['shift'], item['layer'], int(item['test_size'])) 
+                (item["shift"], item["layer"], int(item["test_size"]))
                 for item in existing_results
             }
         except Exception as e:
@@ -329,8 +329,10 @@ def calculate_bootstrap_detection_rates(
             f"! Warning: Requested {n_val} val samples but only {total_val_samples} available."
         )
         n_val = total_val_samples
-    
-    total_combinations = len(shift_to_indices_dict) * len(layers) * len(shift_subset_sizes)
+
+    total_combinations = (
+        len(shift_to_indices_dict) * len(layers) * len(shift_subset_sizes)
+    )
     current_combination = 0
 
     # Process each shift
@@ -353,7 +355,9 @@ def calculate_bootstrap_detection_rates(
                 if combination_key in completed_combinations:
                     print(f"     Skipping cached combination: {combination_key}")
                     continue
-                print(f"     Shift subset size: {target_shift_size} [{current_combination}/{total_combinations}]")
+                print(
+                    f"     Shift subset size: {target_shift_size} [{current_combination}/{total_combinations}]"
+                )
 
                 # Check we have enough samples
                 current_shift_size = min(target_shift_size, n_shift_samples)
@@ -379,7 +383,9 @@ def calculate_bootstrap_detection_rates(
                         bootstrap_shift_indices = np.random.choice(
                             n_shift_samples, size=current_shift_size, replace=False
                         )
-                        shift_bootstrap = shift_embeddings_layer[bootstrap_shift_indices]
+                        shift_bootstrap = shift_embeddings_layer[
+                            bootstrap_shift_indices
+                        ]
 
                         # Combine embeddings for PCA preprocessing (following working implementation)
                         cat_embeddings = torch.cat([val_bootstrap, shift_bootstrap])
@@ -454,7 +460,7 @@ def calculate_bootstrap_detection_rates(
                         pd.DataFrame(all_results).to_csv(csv_path, index=False)
                     except Exception as e:
                         print(f"!    Error saving periodic backup: {e}")
-    
+
     print("Finished calculations.")
     try:
         with open(json_path, "w") as jf:
@@ -463,7 +469,7 @@ def calculate_bootstrap_detection_rates(
         print(f"[Saved] CSV: {csv_path}")
         print(f"[Saved] JSON: {json_path}")
     except Exception as e:
-        print(f"Error in final save: {e}")              
+        print(f"Error in final save: {e}")
 
 
 # --------------------------------------------------------------

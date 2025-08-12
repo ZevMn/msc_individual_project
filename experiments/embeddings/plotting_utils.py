@@ -107,18 +107,22 @@ def plot_layer_representations_scatter(
         layer_df = layer_to_results_dict[layer].query("Shift == @shift").copy()
         if len(layer_df) == 0:
             raise ValueError(f"No data found for layer {layer}")
-        
+
         layer_df = layer_df.assign(**{col: labels[col] for col in columns})
 
         if dataset == "Mammo" and "Manufacturer" in layer_df.columns:
             # Replace manufacturer names with numbers or they spill over the legend
-            layer_df["Manufacturer"] = layer_df["Manufacturer"].astype("category").cat.codes
-        
+            layer_df["Manufacturer"] = (
+                layer_df["Manufacturer"].astype("category").cat.codes
+            )
+
         embeddings_data[layer] = layer_df.sample(
             n=min(num_samples, len(layer_df)), random_state=seed
         )
 
-    main_title = f"{dataset} | {encoder_to_evaluate.title()} | {shift.replace('_', ' ').title()}"
+    main_title = (
+        f"{dataset} | {encoder_to_evaluate.title()} | {shift.replace('_', ' ').title()}"
+    )
 
     # Create PCA figure
     print("\nCreating PCA visualization...")
@@ -273,7 +277,7 @@ def plot_shift_comparison_scatter(
     dataset: str,
     encoder_to_evaluate: str,
     layer_to_results_dict: dict,
-    n_samples=2000
+    n_samples=2000,
 ) -> None:
     """
     Generate a single figure with a grid of PCA and t-SNE scatterplots per layer
@@ -298,11 +302,15 @@ def plot_shift_comparison_scatter(
         layer_df = layer_to_results_dict[layer]
 
         # Filter for moderate shifts only
-        moderate_shifts = [shift for shift in layer_df["Shift"].unique() if "moderate" in shift]
+        moderate_shifts = [
+            shift for shift in layer_df["Shift"].unique() if "moderate" in shift
+        ]
         filtered_shifts_df = layer_df[layer_df["Shift"].isin(moderate_shifts)].copy()
 
         filtered_shifts_df = filtered_shifts_df.sample(frac=1, random_state=42)
-        sample = filtered_shifts_df.sample(n=min(n_samples, len(filtered_shifts_df)), random_state=42)
+        sample = filtered_shifts_df.sample(
+            n=min(n_samples, len(filtered_shifts_df)), random_state=42
+        )
 
         clean_layer = layer.replace("_", " ").title()
 
@@ -371,12 +379,12 @@ def plot_shift_comparison_scatter(
 
 
 def plot_shift_comparison_joint(
-        output_dir: Path,
-        dataset: str,
-        encoder_to_evaluate: str,
-        layer_to_results_dict: dict[str, pd.DataFrame],
-        n_samples=2000
-    ) -> None:
+    output_dir: Path,
+    dataset: str,
+    encoder_to_evaluate: str,
+    layer_to_results_dict: dict[str, pd.DataFrame],
+    n_samples=2000,
+) -> None:
     """
     Grid of 'jointplot-style' panels (scatter + filled KDE marginals) for PCA and t-SNE.
     One row per layer, two columns: PCA (left) and t-SNE (right). A single legend is
@@ -390,7 +398,7 @@ def plot_shift_comparison_joint(
     Saves:  {dataset}-{encoder}-shift_comparison_jointgrid.png
     """
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     set_plot_style()
 
     layers = layer_to_results_dict.keys()
@@ -431,11 +439,16 @@ def plot_shift_comparison_joint(
         pal = {k: v for k, v in zip(unique_shifts, palette)}
 
         # ---- helper for one panel ----
-        def joint_panel(cell_spec, x_col, y_col,
-                        title_if_top=None, draw_legend=False, show_row_label=True):
+        def joint_panel(
+            cell_spec,
+            x_col,
+            y_col,
+            title_if_top=None,
+            draw_legend=False,
+            show_row_label=True,
+        ):
             sub = cell_spec.subgridspec(
-                2, 2, height_ratios=(1, 4), width_ratios=(4, 1),
-                wspace=0.0, hspace=0.0
+                2, 2, height_ratios=(1, 4), width_ratios=(4, 1), wspace=0.0, hspace=0.0
             )
             ax_top = fig.add_subplot(sub[0, 0])
             ax_main = fig.add_subplot(sub[1, 0])
@@ -501,7 +514,8 @@ def plot_shift_comparison_joint(
                 handles, labels = [], []
                 for s in unique_shifts:
                     h = mlines.Line2D(
-                        [], [],
+                        [],
+                        [],
                         marker="o",
                         linestyle="",
                         markersize=np.sqrt(PlotConfig.MARKER_SIZE),
@@ -530,8 +544,12 @@ def plot_shift_comparison_joint(
         # left col (PCA)
         title_left = "PCA" if i == 0 else None
         ax_main_left = joint_panel(
-            outer[i, 0], "PCA 1", "PCA 2",
-            title_if_top=title_left, draw_legend=(i == 0), show_row_label=True
+            outer[i, 0],
+            "PCA 1",
+            "PCA 2",
+            title_if_top=title_left,
+            draw_legend=(i == 0),
+            show_row_label=True,
         )
         if i == 0:
             top_row_main_axes[0] = ax_main_left
@@ -539,17 +557,19 @@ def plot_shift_comparison_joint(
         # right col (t-SNE)
         title_right = "t-SNE" if i == 0 else None
         ax_main_right = joint_panel(
-            outer[i, 1], "t-SNE 1", "t-SNE 2",
-            title_if_top=title_right, draw_legend=(i == 0), show_row_label=False
+            outer[i, 1],
+            "t-SNE 1",
+            "t-SNE 2",
+            title_if_top=title_right,
+            draw_legend=(i == 0),
+            show_row_label=False,
         )
         if i == 0:
             top_row_main_axes[1] = ax_main_right
 
     plt.tight_layout()
 
-    filename = (
-        f"{dataset}-{encoder_to_evaluate}-shift_comparison_jointplot.png"
-    )
+    filename = f"{dataset}-{encoder_to_evaluate}-shift_comparison_jointplot.png"
     path = output_dir / filename
     fig.savefig(path, dpi=300, bbox_inches="tight", facecolor="white")
     plt.close(fig)

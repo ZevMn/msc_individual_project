@@ -374,7 +374,7 @@ def calculate_and_save_layer_pca_and_tsne(
 
     # Produce a separate CSV for embeddings from each layer of the encoder
     for layer in layers:
-        
+
         csv_path = output_dir / f"{layer}_pca_tsne.csv"
         use_cached = csv_path.exists() and not force_calculation
 

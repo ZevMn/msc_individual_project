@@ -16,7 +16,10 @@ from experiments.embeddings import statistical_utils as statistical
 # First experiment called in main execution
 # -----------------------------------------
 def run_visualisation_experiment(
-    encoder_to_evaluate: str, feat_mode: str, dataset: str, force_calculation: bool
+    encoder_to_evaluate: str,
+    feat_mode: str,
+    dataset: str,
+    force_calculation: bool = False,
 ) -> None:
 
     Config.validate()
@@ -103,7 +106,10 @@ def run_visualisation_experiment(
 # Second experiment called in main execution
 # ------------------------------------------
 def run_stats_experiment(
-    encoder_to_evaluate: str, feat_mode: str, dataset: str, force_calculations: bool
+    encoder_to_evaluate: str,
+    feat_mode: str,
+    dataset: str,
+    force_calculations: bool = False,
 ) -> None:
     # We have a given dataset and encoder.
     # We want to loop through the different shift scenarios.
@@ -187,7 +193,10 @@ def run_stats_experiment(
 # Third experiment called in main execution
 # -----------------------------------------
 def run_bootstrap_experiment(
-    encoder_to_evaluate: str, feat_mode: str, dataset: str, force_calculations: bool
+    encoder_to_evaluate: str,
+    feat_mode: str,
+    dataset: str,
+    force_calculations: bool = False,
 ) -> None:
     """
     Runs the bootstrap experiment to calculate detection rates for covariate shifts.
