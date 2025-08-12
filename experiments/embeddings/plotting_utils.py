@@ -91,6 +91,8 @@ def plot_layer_representations_scatter(
         seed: Random seed for reproducibility of sampling points for plotting.
         num_samples: Maximum number of points to include in the plot.
     """
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     set_plot_style()
 
     layers = layer_to_results_dict.keys()
@@ -277,11 +279,15 @@ def plot_shift_comparison_scatter(
     Generate a single figure with a grid of PCA and t-SNE scatterplots per layer
     to compare embedding spaces across layers and shifts.
     """
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     set_plot_style()
 
     layers = layer_to_results_dict.keys()
 
     n_layers = len(layers)
+
+    print("\nCreating scatterplots for shift comparison...")
     fig = plt.figure(figsize=PlotConfig.get_figsize(n_layers, permute=True))
     gs = gridspec.GridSpec(2, n_layers, figure=fig, hspace=0.35, wspace=0.25)
 
@@ -364,77 +370,6 @@ def plot_shift_comparison_scatter(
     )
 
 
-# def single_plot_shift_comparison_joint(
-#         output_dir: Path,
-#         dataset: str,
-#         encoder_to_evaluate: str,
-#         layer_to_results_dict: dict[str, pd.DataFrame],
-#         n_samples=2000,
-#     ) -> None:
-#     """
-#     Create seaborn jointplots (scatter + marginal densities) for PCA and t-SNE.
-
-#     For each layer, validation and shifted subsets are concatenated to share the
-#     same PCA/t-SNE space. Two jointplots (PCA and t-SNE), coloured by shift type,
-#     are produced per layer.
-
-#     Args:
-#         output_dir: Directory where the plot PNGs will be saved.
-#         inputs: A 'PlotInputs' instance.
-#     """
-#     set_plot_style()
-
-#     layers = layer_to_results_dict.keys()
-
-#     for layer in layers:
-
-#         layer_df = layer_to_results_dict[layer].sample(frac=1)
-#         sample = layer_df.sample(n=min(n_samples, len(layer_df)), random_state=42)
-
-#         projections = [("PCA 1", "PCA 2", "PCA"), ("t-SNE 1", "t-SNE 2", "t-SNE")]
-
-#         for x, y, title_suffix in projections:
-#             graph = sns.jointplot(
-#                 data=sample,
-#                 x=x,
-#                 y=y,
-#                 hue="Shift",
-#                 kind="scatter",
-#                 height=5,
-#                 ratio=4,
-#                 space=0,
-#                 palette=PlotConfig.COLOR_PALETTE,
-#                 alpha=PlotConfig.ALPHA,
-#                 s=PlotConfig.MARKER_SIZE,
-#                 marginal_kws=dict(common_norm=False, fill=True),
-#             )
-
-#             handles, labels = graph.ax_joint.get_legend_handles_labels()
-
-#             if graph.ax_joint.legend_ is not None:
-#                 graph.ax_joint.legend_.remove()
-
-#             graph.figure.legend(
-#                 handles,
-#                 labels,
-#                 title="Shift",
-#                 loc="upper right",
-#                 bbox_to_anchor=(1, 0.9),
-#                 borderaxespad=0.5,
-#                 frameon=False,
-#                 fontsize=8,
-#                 title_fontsize=12,
-#             )
-
-#             title_and_save_fig(
-#                 f"Shift Comparison: {dataset} | {encoder_to_evaluate.title()} | {layer.replace('_', ' ').title()} | {title_suffix}",
-#                 graph.figure,
-#                 output_dir,
-#                 f"{dataset}_{encoder_to_evaluate}_{layer}_{title_suffix}_joint.png",
-#                 fontsize=12,
-#             )
-
-
 def plot_shift_comparison_joint(
         output_dir: Path,
         dataset: str,
@@ -454,12 +389,15 @@ def plot_shift_comparison_joint(
 
     Saves:  {dataset}-{encoder}-shift_comparison_jointgrid.png
     """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
     set_plot_style()
 
     layers = layer_to_results_dict.keys()
     n_rows = len(layers)
     n_cols = 2
 
+    print("\nCreating jointplots for shift comparison...")
     fig = plt.figure(figsize=(6 * n_cols, 4 * n_rows + 2), constrained_layout=False)
     fig.suptitle(
         f"Shift Comparison: {dataset} | {encoder_to_evaluate.title()}",

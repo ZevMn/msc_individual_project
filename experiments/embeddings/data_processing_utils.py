@@ -374,8 +374,7 @@ def calculate_and_save_layer_pca_and_tsne(
 
     # Produce a separate CSV for embeddings from each layer of the encoder
     for layer in layers:
-        print(f"Processing layer: {layer}")
-
+        
         csv_path = output_dir / f"{layer}_pca_tsne.csv"
         use_cached = csv_path.exists() and not force_calculation
 
@@ -406,7 +405,7 @@ def calculate_and_save_layer_pca_and_tsne(
                         "t-SNE 1": emb_tsne[:, 0],
                         "t-SNE 2": emb_tsne[:, 1],
                     }
-                ).sample(frac=1, random_state=42)
+                )
 
                 df.to_csv(csv_path, index=False)
                 print(f"Saved results to: {csv_path}")

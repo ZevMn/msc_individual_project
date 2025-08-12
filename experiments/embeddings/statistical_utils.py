@@ -100,6 +100,8 @@ def calculate_PCA_and_tSNE(
 class ShiftTestResult:
     """
     Container for storing the result of a statistical test for a shift.
+
+    Specific to ResNet-50 architecture.
     """
 
     shift: str = ""
@@ -129,8 +131,52 @@ def calculate_detection_rates(
     val_embeddings: dict[str, torch.Tensor],
     test_embeddings: dict[str, torch.Tensor],
     shift_to_indices_dict: dict[str, np.ndarray],
-):
+    force_calculations: bool=False,
+) -> list[ShiftTestResult]:
+    """
+    Calculate detection rates for a number of simulated covariate shifts, 
+    with optional caching.
 
+    Args:
+        output_dir: Directory to save results.
+        dataset: Name of the dataset.
+        encoder_to_evaluate: Name of the encoder being evaluated.
+        layers: List of layer names to evaluate.
+        n_val: Number of validation samples.
+        val_embeddings: Dictionary of validation embeddings by layer.
+        test_embeddings: Dictionary of test embeddings by layer.
+        shift_to_indices_dict: Dictionary mapping shift names to indices.
+        force_calculations: If True, skip cache and recalculate everything.
+    """
+
+    json_path = output_dir / f"{dataset}_{encoder_to_evaluate}_stats.json"
+    csv_path = output_dir / f"{dataset}_{encoder_to_evaluate}_stats.csv"
+
+    # Check for cached results:
+    if json_path.exists() and not force_calculations:
+        print(f"Loading cached results for {dataset}/{encoder_to_evaluate}")
+        try:
+            with open(json_path, "r") as jf:
+                cached_data = json.load(jf)
+            
+            cached_shifts = {item['shift'] for item in cached_data}
+            required_shifts = set(shift_to_indices_dict.keys())
+
+            if cached_shifts == required_shifts:
+                results = [ShiftTestResult(**item) for item in cached_data]
+                return results
+            else:
+                print("Cache is incomplete or outdated.")
+                missing_shifts = required_shifts - cached_shifts
+                extra_shifts = cached_shifts - required_shifts
+                if missing_shifts:
+                    print(f"Missing shifts in cache: {missing_shifts}")
+                if extra_shifts:
+                    print(f"Extra shifts in cache: {extra_shifts}")
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            print(f"Error reading cached results: {e}. Recalculating...")
+
+    print(f"Calculating results for {dataset}/{encoder_to_evaluate}")
     alpha = 0.05
     results: list[ShiftTestResult] = []
 
@@ -194,11 +240,15 @@ def calculate_detection_rates(
 
         # Save the results
         data = [asdict(r) for r in results]
-        json_path = output_dir / f"{dataset}_{encoder_to_evaluate}_stats.json"
-        csv_path = output_dir / f"{dataset}_{encoder_to_evaluate}_stats.csv"
         with open(json_path, "w") as jf:
             json.dump(data, jf, indent=2)
         pd.DataFrame(data).to_csv(csv_path, index=False)
+
+    print("\nCalculations complete.")
+    print(f"[Saved] JSON: {json_path}")
+    print(f"[Saved] CSV: {csv_path}")
+    
+    return results
 
 
 def calculate_bootstrap_detection_rates(
@@ -212,9 +262,11 @@ def calculate_bootstrap_detection_rates(
     n_bootstrap: int,
     n_val: int,
     shift_subset_sizes: list[int],
+    force_calculations: bool=False,
 ) -> None:
     """
-    Calculate bootstrap detection rates for each shift, layer, and test subset size.
+    Calculate bootstrap detection rates for each shift, layer, and test subset size,
+    with optional caching.
 
     For each combination:
     - Bootstrap samples both validation (n_val) and test (test_size) subsets
@@ -234,18 +286,36 @@ def calculate_bootstrap_detection_rates(
         n_bootstrap (int): Number of bootstrap iterations.
         n_val (int): Number of validation samples to use per bootstrap.
         shift_subset_sizes (list[int]): List of test subset sizes to evaluate.
+        force_calculations (bool): If True, skip cache and recalculate everything.
     """
 
+    csv_path = (
+        output_dir / f"bootstrap_detection_rates-{dataset}-{encoder_to_evaluate}.csv"
+    )
+    json_path = (
+        output_dir / f"bootstrap_detection_rates-{dataset}-{encoder_to_evaluate}.json"
+    )
+
+    existing_results = []
+
+    if json_path.exists() and not force_calculations:
+        print(f"Loading cached results for {dataset}/{encoder_to_evaluate}")
+        try:
+            with open(json_path, "r") as jf:
+                existing_results = json.load(jf)
+            completed_combinations = {
+                (item['shift'], item['layer'], int(item['test_size'])) 
+                for item in existing_results
+            }
+        except Exception as e:
+            print(f"Error loading cache: {e}")
+            existing_results = []
+            completed_combinations = set()
+    else:
+        completed_combinations = set()
+
     alpha = 0.05
-    results = {
-        "shift": [],
-        "layer": [],
-        "test_size": [],
-        "detection_rate": [],
-        "mean_pvalue": [],
-        "std_pvalue": [],
-        "n_successful_bootstraps": [],
-    }
+    all_results = existing_results.copy()
 
     print(f"\n=== Starting bootstrap experiment with {n_bootstrap} iterations ===")
     print(f"Validation samples per bootstrap: {n_val}")
@@ -259,6 +329,9 @@ def calculate_bootstrap_detection_rates(
             f"! Warning: Requested {n_val} val samples but only {total_val_samples} available."
         )
         n_val = total_val_samples
+    
+    total_combinations = len(shift_to_indices_dict) * len(layers) * len(shift_subset_sizes)
+    current_combination = 0
 
     # Process each shift
     for shift_name, shift_indices in shift_to_indices_dict.items():
@@ -274,15 +347,20 @@ def calculate_bootstrap_detection_rates(
             n_shift_samples = len(shift_embeddings_layer)
 
             # Process each shift subset size
-            for shift_subset_size in shift_subset_sizes:
-                print(f"     Shift subset size: {shift_subset_size}")
+            for target_shift_size in shift_subset_sizes:
+                combination_key = (shift_name, layer, int(target_shift_size))
+                current_combination += 1
+                if combination_key in completed_combinations:
+                    print(f"     Skipping cached combination: {combination_key}")
+                    continue
+                print(f"     Shift subset size: {target_shift_size} [{current_combination}/{total_combinations}]")
 
                 # Check we have enough samples
-                if shift_subset_size > n_shift_samples:
+                current_shift_size = min(target_shift_size, n_shift_samples)
+                if target_shift_size > n_shift_samples:
                     print(
-                        f"! Warning: Requested {shift_subset_size} samples but only {n_shift_samples} available."
+                        f"! Warning: Requested {target_shift_size} samples but only {n_shift_samples} available."
                     )
-                    shift_subset_size = n_shift_samples
 
                 # Bootstrap iterations
                 p_values = []
@@ -298,10 +376,10 @@ def calculate_bootstrap_detection_rates(
                         val_bootstrap = val_embeddings_layer[val_indices]
 
                         # Bootstrap sample shift set
-                        shift_indices = np.random.choice(
-                            n_shift_samples, size=shift_subset_size, replace=False
+                        bootstrap_shift_indices = np.random.choice(
+                            n_shift_samples, size=current_shift_size, replace=False
                         )
-                        shift_bootstrap = shift_embeddings_layer[shift_indices]
+                        shift_bootstrap = shift_embeddings_layer[bootstrap_shift_indices]
 
                         # Combine embeddings for PCA preprocessing (following working implementation)
                         cat_embeddings = torch.cat([val_bootstrap, shift_bootstrap])
@@ -357,32 +435,35 @@ def calculate_bootstrap_detection_rates(
                 )
                 print(f"     Mean p-value: {mean_pvalue:.3f} ± {std_pvalue:.3f}")
 
-                # Store results
-                results["shift"].append(shift_name)
-                results["layer"].append(layer)
-                results["test_size"].append(shift_subset_size)
-                results["detection_rate"].append(detection_rate)
-                results["mean_pvalue"].append(mean_pvalue)
-                results["std_pvalue"].append(std_pvalue)
-                results["n_successful_bootstraps"].append(successful_bootstraps)
+                new_results = {
+                    "shift": shift_name,
+                    "layer": layer,
+                    "test_size": target_shift_size,
+                    "detection_rate": detection_rate,
+                    "mean_pvalue": mean_pvalue,
+                    "std_pvalue": std_pvalue,
+                    "n_successful_bootstraps": successful_bootstraps,
+                }
+                all_results.append(new_results)
 
-    # Save results to CSV and JSON
-    results_df = pd.DataFrame(results)
-
-    csv_path = (
-        output_dir / f"bootstrap_detection_rates-{dataset}-{encoder_to_evaluate}.csv"
-    )
-    json_path = (
-        output_dir / f"bootstrap_detection_rates-{dataset}-{encoder_to_evaluate}.json"
-    )
-
-    results_df.to_csv(csv_path, index=False)
-    results_dict = results_df.to_dict("records")
-    with open(json_path, "w") as jf:
-        json.dump(results_dict, jf, indent=2)
-
-    print(f"Results saved to CSV: {csv_path}")
-    print(f"Results saved to JSON: {json_path}")
+                # Incremental saving of results to CSV and JSON
+                if current_combination % 4 == 0:
+                    try:
+                        with open(json_path, "w") as jf:
+                            json.dump(all_results, jf, indent=2)
+                        pd.DataFrame(all_results).to_csv(csv_path, index=False)
+                    except Exception as e:
+                        print(f"!    Error saving periodic backup: {e}")
+    
+    print("Finished calculations.")
+    try:
+        with open(json_path, "w") as jf:
+            json.dump(all_results, jf, indent=2)
+        pd.DataFrame(all_results).to_csv(csv_path, index=False)
+        print(f"[Saved] CSV: {csv_path}")
+        print(f"[Saved] JSON: {json_path}")
+    except Exception as e:
+        print(f"Error in final save: {e}")              
 
 
 # --------------------------------------------------------------

@@ -16,7 +16,7 @@ from experiments.embeddings import statistical_utils as statistical
 # First experiment called in main execution
 # -----------------------------------------
 def run_visualisation_experiment(
-    encoder_to_evaluate: str, feat_mode: str, dataset: str
+    encoder_to_evaluate: str, feat_mode: str, dataset: str, force_calculation: bool
 ) -> None:
 
     Config.validate()
@@ -69,12 +69,12 @@ def run_visualisation_experiment(
         val_embeddings=val_embeddings,
         test_embeddings=test_embeddings,
         shift_to_indices_dict=shift_to_indices_dict,
-        force_calculation=False,
+        force_calculation=force_calculation,
     )
 
     # Experiment 1: Visualisation of embeddings
     plotting.plot_layer_representations_scatter(
-        output_dir=output_dir / "layer_representations",
+        output_dir=output_dir,
         dataset=dataset,
         encoder_to_evaluate=encoder_to_evaluate,
         layer_to_results_dict=layer_to_results_dict,
@@ -84,26 +84,26 @@ def run_visualisation_experiment(
 
     # Experiment 2: Visualisation of shifts
     plotting.plot_shift_comparison_scatter(
-        output_dir=output_dir / "shift_comparison",
+        output_dir=output_dir,
         dataset=dataset,
         encoder_to_evaluate=encoder_to_evaluate,
         layer_to_results_dict=layer_to_results_dict,
     )
     plotting.plot_shift_comparison_joint(
-        output_dir=output_dir / "shift_comparison",
+        output_dir=output_dir,
         dataset=dataset,
         encoder_to_evaluate=encoder_to_evaluate,
         layer_to_results_dict=layer_to_results_dict,
     )
 
-    print(f"\n=== VISUALIZATION COMPLETE ===")
+    print(f"\n=== VISUALIZATION COMPLETE ===\n")
 
 
 # ------------------------------------------
 # Second experiment called in main execution
 # ------------------------------------------
 def run_stats_experiment(
-    encoder_to_evaluate: str, feat_mode: str, dataset: str
+    encoder_to_evaluate: str, feat_mode: str, dataset: str, force_calculations: bool
 ) -> None:
     # We have a given dataset and encoder.
     # We want to loop through the different shift scenarios.
@@ -169,6 +169,7 @@ def run_stats_experiment(
         val_embeddings=val_embeddings,
         test_embeddings=test_embeddings,
         shift_to_indices_dict=shift_to_indices_dict,
+        force_calculations=force_calculations,
     )
 
     # Experiment 3: Initial investigation into detection rates
@@ -179,14 +180,14 @@ def run_stats_experiment(
         output_dir=output_dir, dataset=dataset, encoder_to_evaluate=encoder_to_evaluate
     )
 
-    print(f"\n=== STAT CALCULATIONS COMPLETE ===")
+    print(f"\n=== STAT CALCULATIONS COMPLETE ===\n")
 
 
 # -----------------------------------------
 # Third experiment called in main execution
 # -----------------------------------------
 def run_bootstrap_experiment(
-    encoder_to_evaluate: str, feat_mode: str, dataset: str
+    encoder_to_evaluate: str, feat_mode: str, dataset: str, force_calculations: bool
 ) -> None:
     """
     Runs the bootstrap experiment to calculate detection rates for covariate shifts.
@@ -240,10 +241,11 @@ def run_bootstrap_experiment(
         test_embeddings=test_embeddings,
         shift_to_indices_dict=shift_to_indices_dict,
         **bootstrap_config,
+        force_calculations=force_calculations,
     )
 
     # Experiment 4: Bootstrap detection rates analysis
     # Plot the bootstrap results
     plotting.plot_all_bootstrap_results(output_dir)
 
-    print(f"\n=== BOOTSTRAP CALCULATIONS COMPLETE ===")
+    print(f"\n=== BOOTSTRAP CALCULATIONS COMPLETE ===\n")

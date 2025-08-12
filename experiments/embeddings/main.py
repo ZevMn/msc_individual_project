@@ -67,15 +67,16 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     print("\nRunning visualisation experiment:\n")
-    run_visualisation_experiment(args.encoder_to_evaluate, args.feat_mode, args.dataset)
+    run_visualisation_experiment(
+        args.encoder_to_evaluate, args.feat_mode, args.dataset, force_calculation=True
+    )
 
-    # print("\nRunning stats experiment:\n")
-    # run_stats_experiment(args.encoder_to_evaluate, args.feat_mode, args.dataset)
+    print("\nRunning stats experiment:\n")
+    run_stats_experiment(
+        args.encoder_to_evaluate, args.feat_mode, args.dataset, force_calculations=True
+    )
 
-    # print("Running bootstrap detection rates experiment:\n")
-    # run_bootstrap_experiment(args.encoder_to_evaluate, args.feat_mode, args.dataset)
-
-    # from experiments.embeddings.plotting_utils import plot_all_bootstrap_results
-    # output_dir = Config.ROOT / "experiments" / "outputs" / "CollectedBootstrapResults" / "imagenet"
-    # output_dir.mkdir(parents=True, exist_ok=True)
-    # plot_all_bootstrap_results(output_dir=output_dir)
+    print("Running bootstrap detection rates experiment:\n")
+    run_bootstrap_experiment(
+        args.encoder_to_evaluate, args.feat_mode, args.dataset, force_calculations=True
+    )

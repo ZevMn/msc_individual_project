@@ -93,14 +93,12 @@ class Config:
                 "Laterality": "ImageLateralityFinal",
                 "Imaging Protocol": "ViewPosition",
                 "Manufacturer": "ManufacturerModelName",
-                "Density": "tissueden",
             },
             "plot_columns": [
                 "Class",
                 "Laterality",
                 "Imaging Protocol",
                 "Manufacturer",
-                "Density",
             ],
             "simclr_modality_specific": "run_byatk1eo/best.ckpt",
             "modality_encoder_path": "encoder_byatk1eo.pkl",
@@ -146,7 +144,7 @@ class Config:
             ),
             "prev_moderate": partial(
                 shift_generator.mammo_acq_prev_shift,
-                target_density_distribution=np.array([0.15, 0.35, 0.35, 0.15]),
+                target_density_distribution=np.array([0.10, 0.40, 0.40, 0.10]),
             ),
         },
         "Retina": {
