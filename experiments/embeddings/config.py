@@ -179,13 +179,13 @@ class Config:
         "PadChest": {
             # Initial: Female 51%, Phillips 42%
             "gender_subtle": partial(
-                shift_generator.padchest_gender_shift, target_female_proportion=0.49
+                shift_generator.padchest_gender_shift, target_female_proportion=0.48
             ),
             "gender_moderate": partial(
-                shift_generator.padchest_gender_shift, target_female_proportion=0.43
+                shift_generator.padchest_gender_shift, target_female_proportion=0.44
             ),
             "gender_extreme": partial(
-                shift_generator.padchest_gender_shift, target_female_proportion=0.36
+                shift_generator.padchest_gender_shift, target_female_proportion=0.39
             ),
             "sample_subtle": partial(
                 shift_generator.sample_shift_padchest,
@@ -198,6 +198,49 @@ class Config:
             "sample_extreme": partial(
                 shift_generator.sample_shift_padchest,
                 target_prev_phillips=0.28,
+            ),
+        },
+    }
+
+
+    # TBD: Expand this so that it actually simulates a wide range of shifts.
+    EXTENDED_SHIFT_REGISTRY: dict[str, dict[str, Callable]] = {
+        "Mammo": {
+            "acq": partial(
+                shift_generator.mammo_acq_prev_shift,
+                target_manufacturer_distribution=np.array(
+                    [0.50, 0.00, 0.00, 0.20, 0.20, 0.10]
+                ),
+            ),
+            "prev": partial(
+                shift_generator.mammo_acq_prev_shift,
+                target_density_distribution=np.array([0.10, 0.40, 0.40, 0.10]),
+            ),
+        },
+        "Retina": {
+            "acq": partial(
+                shift_generator.retina_acq_prev_shift,
+                target_site_distribution=np.array([0.10, 0.20, 0.70]),
+            ),
+            "prev": partial(
+                shift_generator.retina_acq_prev_shift, target_prevalence=0.5
+            ),
+        },
+        "RSNA": {
+            "gender": partial(
+                shift_generator.rsna_gender_shift, target_female_proportion=0.40
+            ),
+            "subpop": partial(
+                shift_generator.rsna_subpopulation_shift, target_abnormal_neg=0.70
+            ),
+        },
+        "PadChest": {
+            "gender": partial(
+                shift_generator.padchest_gender_shift, target_female_proportion=0.48
+            ),
+            "sample": partial(
+                shift_generator.sample_shift_padchest,
+                target_prev_phillips=0.40,
             ),
         },
     }

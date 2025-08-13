@@ -86,18 +86,18 @@ def run_visualisation_experiment(
     )
 
     # Experiment 2: Visualisation of shifts
-    plotting.plot_shift_comparison_scatter(
-        output_dir=output_dir,
-        dataset=dataset,
-        encoder_to_evaluate=encoder_to_evaluate,
-        layer_to_results_dict=layer_to_results_dict,
-    )
     plotting.plot_shift_comparison_joint(
         output_dir=output_dir,
         dataset=dataset,
         encoder_to_evaluate=encoder_to_evaluate,
         layer_to_results_dict=layer_to_results_dict,
     )
+    # plotting.plot_shift_comparison_scatter(
+    #     output_dir=output_dir,
+    #     dataset=dataset,
+    #     encoder_to_evaluate=encoder_to_evaluate,
+    #     layer_to_results_dict=layer_to_results_dict,
+    # )
 
     print(f"\n=== VISUALIZATION COMPLETE ===\n")
 
@@ -115,7 +115,7 @@ def run_detection_rate_experiment(
     # We want to loop through the different shift scenarios.
     # Ignore mixed shifts. Look at e.g. "acquisition" and "population" shifts.
     # For each type of shift, we want to analyse "subtle", "moderate" and "extreme".
-    # -> Produce a table with MMD outputs from each layer of the encoder (and also BBSD on softmax outputs).
+    # -> Produce a table with MMD outputs from each layer of the encoder.
     # -> (Make sure to subsample properly - look at Mel's function).
     # -> For each row, output the correct data as a csv/json.
     # -> Create a separate script to run and collect the data and process it into a table.
@@ -297,7 +297,7 @@ def run_shift_quantification_experiment(
     )
 
     # Generate covariate-shifted test subsets and store their original indices
-    shift_to_indices_dict = data_processing.simulate_shifts(
+    shift_to_indices_dict = data_processing.simulate_wide_range_of_shifts(
         dataset=dataset, test_df=test_df
     )
 
@@ -313,9 +313,3 @@ def run_shift_quantification_experiment(
         encoder_to_evaluate=encoder_to_evaluate,
         kl_divs=kl_divs
     )
-
-    ### For a range of simulated shifts, calculate KL-divergence.
-    ### Generate a line graph of metric vs shift inputs.
-    ### Determine cutoffs for 'subtle', 'moderate' and 'extreme' magnitudes.
-
-

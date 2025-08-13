@@ -6,11 +6,8 @@ Statistical utilities for detecting distribution shifts in embedding spaces.
 This module provides implementations of several statistical metrics to compare
 two distributions (reference vs shifted embeddings) across model layers.
 Metrics supported:
-    - BBSD
     - MMD (Maximum Mean Discrepancy with RBF kernel)
-    - Energy distance
     - KL divergence
-    - Jensen-Shannon divergence
 
 Each function returns structured results using the ShiftTestResult dataclass.
 Helper functions are provided to compute metrics individually or all at once,

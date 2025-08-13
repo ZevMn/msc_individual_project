@@ -100,6 +100,14 @@ def run_shift_identification(
     # NB: Add my shift generating function in as replacement
     # Iterate through the layers?
 
+    # Quantify shift magnitude using KL divergence.
+    # Depending on which 'band' it falls into (and possibly the encoder),
+    # route to a specific layer's embeddings, or try this "critical_layer"
+    # in addition to "final_layer".
+    # If covariate shift, then analyse and see if shift was detected in both layers or only final.
+    # Based on this, distinguish between gender and acquisition shifts.
+    # NB: Equivalent shift strengths must be of same KL divergence magnitude
+
     encoder_feats_val = val_embeddings["final_layer"][val_idx]
     probas_val = task_output["val"]["probas"][val_idx] + 1e-16
     y_val = y_val[val_idx]

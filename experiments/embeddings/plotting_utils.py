@@ -8,7 +8,7 @@ The module provides:
     - Helpers to concatenate embeddings and compute PCA/t-SNE projections.
     - High-level plotting routines (scatter plots and joint plots) for individual
       layers or across layers, optionally coloured by labels or shift type.
-    - A thin wrapper to run BBSD and MMD permutation tests for distribution shift
+    - A thin wrapper to run MMD permutation tests for distribution shift
       detection.
 
 Typical workflow:
@@ -290,7 +290,6 @@ def plot_shift_comparison_scatter(
     set_plot_style()
 
     layers = layer_to_results_dict.keys()
-
     n_layers = len(layers)
 
     print("\nCreating scatterplots for shift comparison...")
@@ -431,8 +430,18 @@ def plot_shift_comparison_joint(
 
     for i, layer in enumerate(layers):
 
-        layer_df = layer_to_results_dict[layer].sample(frac=1)
-        sample = layer_df.sample(n=min(n_samples, len(layer_df)), random_state=42)
+        layer_df = layer_to_results_dict[layer]
+
+        # Filter for moderate shifts only
+        moderate_shifts = [
+            shift for shift in layer_df["Shift"].unique() if "moderate" in shift
+        ]
+        filtered_shifts_df = layer_df[layer_df["Shift"].isin(moderate_shifts)].copy()
+
+        filtered_shifts_df = filtered_shifts_df.sample(frac=1, random_state=42)
+        sample = filtered_shifts_df.sample(
+            n=min(n_samples, len(filtered_shifts_df)), random_state=42
+        )
 
         unique_shifts = sorted(sample["Shift"].unique())
         palette = sns.color_palette(
@@ -709,7 +718,64 @@ def plot_detection_rate_linegraph(
     )
 
 
-def plot_bootstrap_detection_rates(
+def plot_all_bootstrap_results(
+    output_dir: Path,
+) -> None:
+    """
+    Load and plot bootstrap results for all datasets found in results directory.
+
+    Args:
+        output_dir: Directory containing CSV files with bootstrap results.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Find all result files
+    file_pattern = "bootstrap_detection_rates-*.csv"
+    csv_files = list(output_dir.glob(file_pattern))
+    if not csv_files:
+        raise ValueError(
+            f"No files matching pattern '{file_pattern}' found in {output_dir}"
+        )
+
+    all_results_df = pd.DataFrame()
+    for csv_file in csv_files:
+        # Extract dataset and encoder from filename
+        # Assuming format: bootstrap_detection_rates-{dataset}-{encoder}.csv
+        filename_parts = csv_file.stem.split("-")
+        dataset = filename_parts[1]
+        encoder = filename_parts[2]
+
+        try:
+            results_df = pd.read_csv(csv_file)
+            results_df["dataset"] = dataset
+            results_df["encoder"] = encoder
+            all_results_df = pd.concat([all_results_df, results_df], ignore_index=True)
+        except Exception as e:
+            print(f"! Error processing {csv_file}: {e}")
+            continue
+
+    datasets = all_results_df["dataset"].unique()
+    for dataset in datasets:
+        dataset_subset = all_results_df[all_results_df["dataset"] == dataset]
+
+        plot_bootstrap_detection_rate_barchart(
+            output_dir=output_dir,
+            dataset=dataset,
+            all_results_df=dataset_subset,
+        )
+        plot_bootstrap_detection_rate_heatmap(
+            output_dir=output_dir,
+            dataset=dataset,
+            all_results_df=dataset_subset,
+        )
+        plot_bootstrap_detection_rate_heatmap_combined(
+            output_dir=output_dir,
+            dataset=dataset,
+            all_results_df=dataset_subset,
+        )
+
+
+def plot_bootstrap_detection_rate_barchart(
     output_dir: Path,
     dataset: str,
     all_results_df: pd.DataFrame,
@@ -873,49 +939,227 @@ def plot_bootstrap_detection_rates(
     print(f"[Saved] {file_name}\n")
 
 
-def plot_all_bootstrap_results(
+def plot_bootstrap_detection_rate_heatmap(
     output_dir: Path,
+    dataset: str,
+    all_results_df: pd.DataFrame,
 ) -> None:
     """
-    Load and plot bootstrap results for all datasets found in results directory.
+    Generate heatmaps of bootstrap detection rates for each encoder/test_size combination.
+    Shows detection rates across shifts (rows) and layers (columns).
 
     Args:
-        output_dir: Directory containing CSV files with bootstrap results.
+        output_dir: Directory to save the heatmap plots
+        dataset: Name of the dataset to plot results for
+        all_results_df: DataFrame containing bootstrap results with columns:
+                   ['dataset', 'encoder', 'shift', 'layer', 'test_size', 'detection_rate', ...]
     """
+    
+    # Check if required columns are present
+    required = {"encoder", "layer", "shift", "test_size", "detection_rate"}
+    missing = required - set(all_results_df.columns)
+    if missing:
+        raise ValueError(f"Missing columns in all_results_df: {missing}")
+
+    # Filter for the specific dataset
+    dataset_df = all_results_df[all_results_df["dataset"] == dataset].copy()
+    if dataset_df.empty:
+        print(f"No data found for dataset: {dataset}")
+        return
+
+    encoders = sorted(dataset_df["encoder"].unique())
+    layers = ["after_maxpool", "layer_1", "layer_2", "layer_3", "final_layer"]
+    shifts = sorted(dataset_df["shift"].unique())
+    test_sizes = sorted(dataset_df["test_size"].unique())
+
+    # Create a separate heatmap for each encoder/test_size combination
+    for encoder in encoders:
+        for test_size in test_sizes:
+
+            subset = dataset_df[
+                (dataset_df["encoder"] == encoder) & 
+                (dataset_df["test_size"] == test_size)
+            ] 
+            if subset.empty:
+                continue
+                
+            # Pivot table: shifts (rows) × layers (columns)
+            heatmap_data = subset.pivot_table(
+                index='shift', 
+                columns='layer', 
+                values='detection_rate', 
+                fill_value=0
+            )
+            
+            # Check all layers present in the correct order
+            available_layers = [layer for layer in layers if layer in heatmap_data.columns]
+            heatmap_data = heatmap_data.reindex(columns=available_layers)
+            
+            # Check all shifts present
+            heatmap_data = heatmap_data.reindex(index=shifts, fill_value=0)
+            
+            # Create annotation array with detection rates
+            annot_arr = heatmap_data.values.copy()
+            annot_str = np.empty_like(annot_arr, dtype=object)
+            
+            # Show values >= 0.05 as annotations (empty string otherwise)
+            for i in range(annot_arr.shape[0]):
+                for j in range(annot_arr.shape[1]):
+                    val = annot_arr[i, j]
+                    if val >= 0.05:
+                        annot_str[i, j] = f"{val:.2f}"
+                    else:
+                        annot_str[i, j] = ""
+            
+            # Create the heatmap
+            fig, ax = plt.subplots(figsize=(len(available_layers) * 1.5 + 2, len(shifts) * 0.6 + 2))
+            sns.heatmap(
+                heatmap_data,
+                annot=annot_str,
+                fmt="",
+                cmap="Blues",
+                linewidths=0.5,
+                cbar_kws={"label": "Detection Rate"},
+                ax=ax,
+                vmin=0,
+                vmax=1,
+                square=False
+            )
+            
+            ax.set_ylabel("Shift", fontsize=12)
+            ax.set_xlabel("Layer", fontsize=12)
+            
+            clean_layer_labels = [layer.replace("_", " ").title() for layer in available_layers]
+            ax.set_xticklabels(clean_layer_labels, rotation=45, ha="right")
+            clean_shift_labels = [str(shift) for shift in heatmap_data.index]
+            ax.set_yticklabels(clean_shift_labels, rotation=0)
+            
+            title = f"Bootstrap Detection Rates: {dataset}\n{encoder.replace('_', ' ').title()} | {test_size} samples"
+            ax.set_title(title, fontsize=14, fontweight="bold", pad=20)
+            
+            output_dir.mkdir(parents=True, exist_ok=True)
+            filename = f"bootstrap_heatmap_{dataset}_{encoder}_{test_size}samples.png"
+            filepath = output_dir / filename
+            fig.savefig(filepath, dpi=400, bbox_inches="tight", facecolor="white")
+            plt.close(fig)
+            print(f"[Saved] {filename}")
+
+
+def plot_bootstrap_detection_rate_heatmap_combined(
+    output_dir: Path,
+    dataset: str,
+    all_results_df: pd.DataFrame,
+) -> None:
+    """
+    Generate a combined heatmap showing bootstrap detection rates for all test sizes.
+    Creates subplots for each encoder, with test sizes as separate heatmaps.
+
+    Args:
+        output_dir: Directory to save the heatmap plots
+        dataset: Name of the dataset to plot results for
+        all_results_df: DataFrame containing bootstrap results
+    """
+    
+    # Filter for the specific dataset
+    dataset_df = all_results_df[all_results_df["dataset"] == dataset].copy()
+    if dataset_df.empty:
+        print(f"No data found for dataset: {dataset}")
+        return
+
+    # Get unique values
+    encoders = sorted(dataset_df["encoder"].unique())
+    layers = ["after_maxpool", "layer_1", "layer_2", "layer_3", "final_layer"]
+    shifts = sorted(dataset_df["shift"].unique())
+    test_sizes = sorted(dataset_df["test_size"].unique())
+
+    # Create a figure with subplots for each encoder
+    n_encoders = len(encoders)
+    n_test_sizes = len(test_sizes)
+    
+    fig, axes = plt.subplots(
+        n_encoders, n_test_sizes, 
+        figsize=(n_test_sizes * 6, n_encoders * 4),
+        squeeze=False
+    )
+    
+        # Create a separate heatmap for each encoder/test_size combination
+    for encoder_idx, encoder in enumerate(encoders):
+        for size_idx, test_size in enumerate(test_sizes):
+            ax = axes[encoder_idx, size_idx]
+            
+            # Pivot table: shifts (rows) × layers (columns)
+            subset = dataset_df[
+                (dataset_df["encoder"] == encoder) & 
+                (dataset_df["test_size"] == test_size)
+            ]
+            if subset.empty:
+                ax.set_visible(False)
+                continue
+                
+            heatmap_data = subset.pivot_table(
+                index='shift', 
+                columns='layer', 
+                values='detection_rate', 
+                fill_value=0
+            )
+            
+            # Ensure all layers are present in the correct order
+            available_layers = [layer for layer in layers if layer in heatmap_data.columns]
+            heatmap_data = heatmap_data.reindex(columns=available_layers)
+            heatmap_data = heatmap_data.reindex(index=shifts, fill_value=0)
+            
+            # Create annotation array
+            annot_str = np.empty_like(heatmap_data.values, dtype=object)
+            for i in range(heatmap_data.shape[0]):
+                for j in range(heatmap_data.shape[1]):
+                    val = heatmap_data.iloc[i, j]
+                    annot_str[i, j] = f"{val:.2f}" if val >= 0.01 else ""
+            
+            # Create the heatmap
+            sns.heatmap(
+                heatmap_data,
+                annot=annot_str,
+                fmt="",
+                cmap="Blues",
+                linewidths=0.5,
+                cbar=size_idx == n_test_sizes - 1,  # Only show colorbar on rightmost plot
+                cbar_kws={"label": "Detection Rate"} if size_idx == n_test_sizes - 1 else None,
+                ax=ax,
+                vmin=0,
+                vmax=1,
+            )
+            
+            # Labels and formatting
+            if encoder_idx == n_encoders - 1:  # Bottom row
+                clean_layer_labels = [layer.replace("_", " ").title() for layer in available_layers]
+                ax.set_xticklabels(clean_layer_labels, rotation=45, ha="right")
+                ax.set_xlabel("Layer", fontsize=10)
+            else:
+                ax.set_xticklabels([])
+                ax.set_xlabel("")
+            
+            if size_idx == 0:  # Leftmost column
+                clean_shift_labels = [str(shift) for shift in heatmap_data.index]
+                ax.set_yticklabels(clean_shift_labels, rotation=0)
+                ax.set_ylabel("Shift", fontsize=10)
+            else:
+                ax.set_yticklabels([])
+                ax.set_ylabel("")
+            
+            title = f"{encoder.replace('_', ' ').title()}\n{test_size} samples"
+            ax.set_title(title, fontsize=10, fontweight="bold")
+    
+    fig.suptitle(
+        f"Bootstrap Detection Rate Heatmaps: {dataset}", 
+        fontsize=16, fontweight="bold", y=0.98
+    )
+    
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Find all result files
-    file_pattern = "bootstrap_detection_rates-*.csv"
-    csv_files = list(output_dir.glob(file_pattern))
-    if not csv_files:
-        raise ValueError(
-            f"No files matching pattern '{file_pattern}' found in {output_dir}"
-        )
-
-    all_results_df = pd.DataFrame()
-    for csv_file in csv_files:
-        # Extract dataset and encoder from filename
-        # Assuming format: bootstrap_detection_rates-{dataset}-{encoder}.csv
-        filename_parts = csv_file.stem.split("-")
-        dataset = filename_parts[1]
-        encoder = filename_parts[2]
-
-        try:
-            results_df = pd.read_csv(csv_file)
-            results_df["dataset"] = dataset
-            results_df["encoder"] = encoder
-            all_results_df = pd.concat([all_results_df, results_df], ignore_index=True)
-        except Exception as e:
-            print(f"! Error processing {csv_file}: {e}")
-            continue
-
-    datasets = all_results_df["dataset"].unique()
-    for dataset in datasets:
-        plot_bootstrap_detection_rates(
-            output_dir=output_dir,
-            dataset=dataset,
-            all_results_df=all_results_df[all_results_df["dataset"] == dataset],
-        )
+    filename = f"bootstrap_heatmap_combined_{dataset}.png"
+    filepath = output_dir / filename
+    fig.savefig(filepath, dpi=400, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    print(f"[Saved] {filename}")
 
 
 def plot_kl_linegraph(

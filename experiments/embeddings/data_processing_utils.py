@@ -416,3 +416,27 @@ def calculate_and_save_layer_pca_and_tsne(
             raise IOError(f"Error processing layer {layer}: {e}")
 
     return layer_to_results_dict
+
+
+def simulate_wide_range_of_shifts(dataset: str, test_df: pd.DataFrame) -> dict[str, np.ndarray]:
+    """
+    Simulate a wide range of shifts for quantification experiment.
+    Apply the shift functions for 'dataset' to the test DataFrame and
+    return a mapping from shift name to the original row indices ('idx_in_original')
+    that comprise each shifted subset.
+    """
+
+    shift_to_indices_dict = {}
+
+    print(f"Simulating wide range of shifts on test data...")
+    for shift_name, shift_fn in Config.EXTENDED_SHIFT_REGISTRY[dataset].items():
+        df = shift_fn(test_df.copy(), random_state=Config.SEED)
+
+        if "idx_in_original" not in df.columns:
+            raise ValueError(
+                f"Shift function '{shift_name}' must preserve 'idx_in_original' column."
+            )
+
+        shift_to_indices_dict[shift_name] = df["idx_in_original"].to_numpy()
+
+    return shift_to_indices_dict
