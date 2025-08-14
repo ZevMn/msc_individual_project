@@ -84,6 +84,14 @@ def run_visualisation_experiment(
         labels=val_labels,
         shift="no_shift",
     )
+    plotting.plot_layer_representations_jointplot(
+        output_dir=output_dir,
+        dataset=dataset,
+        encoder_to_evaluate=encoder_to_evaluate,
+        layer_to_results_dict=layer_to_results_dict,
+        labels=val_labels,
+        shift="no_shift",
+    )
 
     # Experiment 2: Visualisation of shifts
     plotting.plot_shift_comparison_joint(
@@ -267,6 +275,7 @@ def run_shift_quantification_experiment(
     encoder_to_evaluate: str,
     feat_mode: str,
     dataset: str,
+    force_calculations: bool = False,
 ) -> None:
 
     Config.validate()
@@ -301,15 +310,20 @@ def run_shift_quantification_experiment(
         dataset=dataset, test_df=test_df
     )
 
-    kl_divs: dict[str, float] = {}
-    early_val = val_embeddings["after_maxpool"]
-    for shift_name, shift_indices in shift_to_indices_dict.items():
-        early_test = test_embeddings["after_maxpool"][shift_indices]
-        kl_divs[shift_name] = statistical.kl_divergence(early_val, early_test)
-
-    plotting.plot_kl_linegraph(
+    # Calculate and plot KL divergences for all simulated shifts
+    kl_divs = statistical.calculate_kl_div_for_all_shifts(
         output_dir=output_dir,
         dataset=dataset,
         encoder_to_evaluate=encoder_to_evaluate,
-        kl_divs=kl_divs
+        val_embeddings=val_embeddings,
+        test_embeddings=test_embeddings,
+        shift_to_indices_dict=shift_to_indices_dict,
+        layer="after_maxpool",
+        force_calculations=force_calculations,
+    )
+    plotting.plot_kl_scatter(
+        output_dir=output_dir,
+        dataset=dataset,
+        encoder_to_evaluate=encoder_to_evaluate,
+        kl_divs=kl_divs,
     )

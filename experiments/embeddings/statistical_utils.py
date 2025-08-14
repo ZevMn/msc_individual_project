@@ -469,14 +469,98 @@ def calculate_bootstrap_detection_rates(
         print(f"Error in final save: {e}")
 
 
-def kl_divergence(reference: torch.Tensor, target: torch.Tensor) -> float:
+def calculate_kl_divergence_for_embeddings(
+    reference_embeddings: np.ndarray, 
+    target_embeddings: np.ndarray,
+    num_bins: int = 50, 
+    epsilon: float = 1e-10
+) -> float:
     """
-    Compute average KL divergence KL(p || q).
+    Correctly calculates KL divergence between two sets of embeddings.
+    
+    1. Flattens embeddings into 1D arrays.
+    2. Determines a common range for binning.
+    3. Creates normalized, smoothed histograms (probability distributions).
+    4. Computes KL divergence between the two distributions.
     """
-    reference_np = reference.numpy()
-    target_np = target.numpy()
+    # Step 1: Flatten embeddings to treat them as pools of values
+    reference_flat = reference_embeddings.flatten()
+    target_flat = target_embeddings.flatten()
 
-    total = 0.0
-    for ref, tar in zip(reference_np, target_np):
-        total += float(entropy(ref, tar))
-    return total / len(reference)
+    # Step 2: Determine a common range for the histograms
+    min_val = min(reference_flat.min(), target_flat.min())
+    max_val = max(reference_flat.max(), target_flat.max())
+    bins = np.linspace(min_val, max_val, num_bins)
+
+    # Step 3: Generate histograms
+    p_hist, _ = np.histogram(reference_flat, bins=bins)
+    q_hist, _ = np.histogram(target_flat, bins=bins)
+
+    # Step 4: Smooth and normalize to create valid probability distributions
+    p_smoothed = p_hist + epsilon
+    q_smoothed = q_hist + epsilon
+    
+    p_dist = p_smoothed / p_smoothed.sum()
+    q_dist = q_smoothed / q_smoothed.sum()
+
+    # Step 5: Calculate KL Divergence
+    # entropy(p, q) calculates KL(p || q)
+    return float(entropy(p_dist, q_dist))
+
+
+def calculate_kl_div_for_all_shifts(
+        output_dir: Path,
+        dataset: str,
+        encoder_to_evaluate: str,
+        val_embeddings: dict[str, torch.Tensor],
+        test_embeddings: dict[str, torch.Tensor],
+        shift_to_indices_dict: dict[str, np.ndarray],
+        layer: str,
+        force_calculations: bool = False,
+) -> dict[str, float]:
+    
+    csv_path = (
+        output_dir / f"kl_divergence-{dataset}-{encoder_to_evaluate}.csv"
+    )
+    json_path = (
+        output_dir / f"kl_divergence-{dataset}-{encoder_to_evaluate}.json"
+    )
+
+    kl_divs: dict[str, float] = {}
+
+    if json_path.exists() and not force_calculations:
+        print(f"Loading cached results for {dataset}/{encoder_to_evaluate}")
+        try:
+            with open(json_path, "r") as jf:
+                cached_data = json.load(jf)
+
+            cached_shifts = set(cached_data.keys())
+            required_shifts = set(shift_to_indices_dict.keys())
+
+            if cached_shifts == required_shifts:
+                kl_divs = cached_data
+                return kl_divs
+            else:
+                print("Cache is incomplete or outdated. Recalculating...")
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            print(f"Error reading cached results: {e}. Recalculating...")
+    
+    early_val = val_embeddings[layer]
+    for shift_name, shift_indices in shift_to_indices_dict.items():
+        early_test = test_embeddings[layer][shift_indices]
+        kl_divs[shift_name] = calculate_kl_divergence_for_embeddings(
+            early_val.numpy(), early_test.numpy()
+        )
+
+    print("Finished calculations.")
+    try:
+        with open(json_path, "w") as jf:
+            json.dump(kl_divs, jf, indent=2)
+        df = pd.DataFrame(kl_divs.items(), columns=['shift_name', 'kl_divergence'])
+        df.to_csv(csv_path, index=False)
+        print(f"[Saved] CSV: {csv_path}")
+        print(f"[Saved] JSON: {json_path}")
+    except Exception as e:
+        print(f"Error in final save: {e}")
+
+    return kl_divs
