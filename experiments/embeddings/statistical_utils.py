@@ -470,14 +470,14 @@ def calculate_bootstrap_detection_rates(
 
 
 def calculate_kl_divergence_for_embeddings(
-    reference_embeddings: np.ndarray, 
+    reference_embeddings: np.ndarray,
     target_embeddings: np.ndarray,
-    num_bins: int = 50, 
-    epsilon: float = 1e-10
+    num_bins: int = 50,
+    epsilon: float = 1e-10,
 ) -> float:
     """
     Correctly calculates KL divergence between two sets of embeddings.
-    
+
     1. Flattens embeddings into 1D arrays.
     2. Determines a common range for binning.
     3. Creates normalized, smoothed histograms (probability distributions).
@@ -499,7 +499,7 @@ def calculate_kl_divergence_for_embeddings(
     # Step 4: Smooth and normalize to create valid probability distributions
     p_smoothed = p_hist + epsilon
     q_smoothed = q_hist + epsilon
-    
+
     p_dist = p_smoothed / p_smoothed.sum()
     q_dist = q_smoothed / q_smoothed.sum()
 
@@ -509,22 +509,18 @@ def calculate_kl_divergence_for_embeddings(
 
 
 def calculate_kl_div_for_all_shifts(
-        output_dir: Path,
-        dataset: str,
-        encoder_to_evaluate: str,
-        val_embeddings: dict[str, torch.Tensor],
-        test_embeddings: dict[str, torch.Tensor],
-        shift_to_indices_dict: dict[str, np.ndarray],
-        layer: str,
-        force_calculations: bool = False,
+    output_dir: Path,
+    dataset: str,
+    encoder_to_evaluate: str,
+    val_embeddings: dict[str, torch.Tensor],
+    test_embeddings: dict[str, torch.Tensor],
+    shift_to_indices_dict: dict[str, np.ndarray],
+    layer: str,
+    force_calculations: bool = False,
 ) -> dict[str, float]:
-    
-    csv_path = (
-        output_dir / f"kl_divergence-{dataset}-{encoder_to_evaluate}.csv"
-    )
-    json_path = (
-        output_dir / f"kl_divergence-{dataset}-{encoder_to_evaluate}.json"
-    )
+
+    csv_path = output_dir / f"kl_divergence-{dataset}-{encoder_to_evaluate}.csv"
+    json_path = output_dir / f"kl_divergence-{dataset}-{encoder_to_evaluate}.json"
 
     kl_divs: dict[str, float] = {}
 
@@ -544,7 +540,7 @@ def calculate_kl_div_for_all_shifts(
                 print("Cache is incomplete or outdated. Recalculating...")
         except (json.JSONDecodeError, KeyError, TypeError) as e:
             print(f"Error reading cached results: {e}. Recalculating...")
-    
+
     early_val = val_embeddings[layer]
     for shift_name, shift_indices in shift_to_indices_dict.items():
         early_test = test_embeddings[layer][shift_indices]
@@ -556,7 +552,7 @@ def calculate_kl_div_for_all_shifts(
     try:
         with open(json_path, "w") as jf:
             json.dump(kl_divs, jf, indent=2)
-        df = pd.DataFrame(kl_divs.items(), columns=['shift_name', 'kl_divergence'])
+        df = pd.DataFrame(kl_divs.items(), columns=["shift_name", "kl_divergence"])
         df.to_csv(csv_path, index=False)
         print(f"[Saved] CSV: {csv_path}")
         print(f"[Saved] JSON: {json_path}")

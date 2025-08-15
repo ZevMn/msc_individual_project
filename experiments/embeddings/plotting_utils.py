@@ -1058,7 +1058,7 @@ def plot_bootstrap_detection_rate_barchart(
     fig, axes = plt.subplots(
         n_encoders, n_layers, figsize=(4 * n_layers, 3 * n_encoders + 2)
     )
-    plt.subplots_adjust(left=0.12, bottom=0.15)
+    plt.subplots_adjust(left=0.15, bottom=0.15)
 
     # Handle the case where there's only one encoder - shape (1, n_layers)
     if len(encoders) == 1:
@@ -1151,7 +1151,7 @@ def plot_bootstrap_detection_rate_barchart(
             # Add encoder label on the left
             if layer_idx == 0:
                 ax.text(
-                    -0.25,
+                    -0.35,
                     0.5,
                     encoder,
                     transform=ax.transAxes,

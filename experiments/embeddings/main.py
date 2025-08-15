@@ -69,20 +69,20 @@ if __name__ == "__main__":
 
     # print("\nRunning visualisation experiment:\n")
     # run_visualisation_experiment(
-    #     args.encoder_to_evaluate, args.feat_mode, args.dataset, force_calculation=True
+    #     args.encoder_to_evaluate, args.feat_mode, args.dataset, force_calculation=False
     # )
 
-    # print("\nRunning stats experiment:\n")
-    # run_detection_rate_experiment(
-    #     args.encoder_to_evaluate, args.feat_mode, args.dataset, force_calculations=True
-    # )
-
-    # print("Running bootstrap detection rates experiment:\n")
-    # run_bootstrap_experiment(
-    #     args.encoder_to_evaluate, args.feat_mode, args.dataset, force_calculations=True
-    # )
-
-    print("Running shift quantification experiment:\n")
-    run_shift_quantification_experiment(
-        args.encoder_to_evaluate, args.feat_mode, args.dataset, force_calculations=True
+    print("\nRunning stats experiment:\n")
+    run_detection_rate_experiment(
+        args.encoder_to_evaluate, args.feat_mode, args.dataset, force_calculations=False
     )
+
+    print("Running bootstrap detection rates experiment:\n")
+    run_bootstrap_experiment(
+        args.encoder_to_evaluate, args.feat_mode, args.dataset, force_calculations=False
+    )
+
+    # print("Running shift quantification experiment:\n")
+    # run_shift_quantification_experiment(
+    #     args.encoder_to_evaluate, args.feat_mode, args.dataset, force_calculations=False
+    # )

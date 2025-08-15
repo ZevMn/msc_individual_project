@@ -75,6 +75,7 @@ def run_shift_identification(
     num_classes=2,
     alpha=0.05,
     is_embed=False,
+    encoder_name="",
 ):
     """
     Runs one iteration shift identification/detection tests for a fixed reference and test set.
@@ -98,24 +99,24 @@ def run_shift_identification(
         encoder_output=encoder_output
     )
 
-    # Proposed pipeline extension (based on KL divergence experiment and also shift detection experiment):
-    # Run first for modality specific encoder, final layer embeddings (most sensitive).
-    # If covariate shift is detected, then detect also for SimCLR ImageNet layer 2 embeddings.
-    # (Layer 2 is a balance between sensitivity and specificity).
-    # If no covariate shift detected, then suggest gender. Otherwise, suggest acquisition/subpop (for PadChest/RSNA)
+    ############################################
+    layer = "final_layer"
+    if encoder_name == "simclr_imagenet":
+        layer = "layer_1"
+    ############################################
 
-    encoder_feats_val = val_embeddings["final_layer"][val_idx]
+    encoder_feats_val = val_embeddings[layer][val_idx]
     probas_val = task_output["val"]["probas"][val_idx] + 1e-16
     y_val = y_val[val_idx]
-    encoder_feats_test = test_embeddings["final_layer"][idx_shifted]
+    encoder_feats_test = test_embeddings[layer][idx_shifted]
     probas_test = task_output["test"]["probas"][idx_shifted] + 1e-16
 
     assert (
         task_output["test"]["probas"].shape[0]
-        == test_embeddings["final_layer"].shape[0]
+        == test_embeddings[layer].shape[0]
     )
     assert (
-        task_output["val"]["probas"].shape[0] == val_embeddings["final_layer"].shape[0]
+        task_output["val"]["probas"].shape[0] == val_embeddings[layer].shape[0]
     )
     n_val = encoder_feats_val.shape[0]
 
@@ -212,6 +213,7 @@ def run_multi_detection_identification(
     alpha=0.05,
     num_classes=2,
     is_embed=False,
+    encoder_name="",
 ):
     """
     Runs shift detection/identification multiple times for evaluation.
@@ -262,6 +264,7 @@ def run_multi_detection_identification(
                     alpha=alpha,
                     num_classes=num_classes,
                     is_embed=is_embed,
+                    encoder_name=encoder_name,
                 )
                 outputs.update({"n_test": test_size, "boot": i, "val_size": val_size})
                 print(outputs)
