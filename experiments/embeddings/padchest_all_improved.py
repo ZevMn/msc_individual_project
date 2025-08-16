@@ -87,8 +87,11 @@ def run_padchest(model_to_evaluate, encoder_to_evaluate, shift):
             if isinstance(res, pd.DataFrame)
             else res["final_identified_shift"]
         )
+        print(f"final result detected: {base_final_result}.")
+
 
         if base_final_result in ("Covariate only", "Covariate + Prevalence"):
+            print("Determining root cause of covariate shift.")
             comparative_res = run_multi_detection_identification(
                 task_output,
                 simclr_imagenet_encoder_output,
@@ -108,6 +111,7 @@ def run_padchest(model_to_evaluate, encoder_to_evaluate, shift):
             res["final_identified_shift"] = base_final_result.replace(
                 "Covariate", f"Covariate ({suffix})"
             )
+            print(f"Shift is: {res['final_identified_shift']}")
 
         if isinstance(res, dict):
             pd.DataFrame([res]).to_csv(filename, index=False)
@@ -186,7 +190,7 @@ def run_padchest(model_to_evaluate, encoder_to_evaluate, shift):
                 filename = f"outputs/new_padchest_gender_prev_{female_shifted}_n{n_boostraps}_{model_id}_{encoder_id}_v{val_sizes[0]}_t{test_sizes}.csv"
 
                 def shifted_set_generating_fn(target_set_size):
-                    shift_generator.padchest_gender_prev_shift(
+                    return shift_generator.padchest_gender_prev_shift(
                         test_df,
                         target_female_proportion=female_shifted,
                         target_disease=prevalence_shifted,

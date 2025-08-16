@@ -1048,15 +1048,20 @@ def plot_bootstrap_detection_rate_barchart(
     # Get unique values for organizing the plot
     encoders = sorted(all_results_df["encoder"].unique())
     layers = ["after_maxpool", "layer_1", "layer_2", "layer_3", "final_layer"]
-    shifts = sorted(all_results_df["shift"].unique())
     test_sizes = sorted(all_results_df["test_size"].unique())
+
+    shift_order = ["subtle", "moderate", "extreme"]
+    shifts = [s for s in shift_order if s in all_results_df["shift"].unique()]
 
     # Create figure and subplots
     colors = plt.get_cmap("Set3")(np.linspace(0, 1, len(test_sizes)))
     n_encoders = len(encoders)
     n_layers = len(layers)
     fig, axes = plt.subplots(
-        n_encoders, n_layers, figsize=(4 * n_layers, 3 * n_encoders + 2)
+        n_encoders,
+        n_layers,
+        figsize=(4 * n_layers, 3 * n_encoders + 2),
+        gridspec_kw={"hspace": 0.4, "wspace": 0.3},
     )
     plt.subplots_adjust(left=0.15, bottom=0.15)
 
@@ -1130,17 +1135,22 @@ def plot_bootstrap_detection_rate_barchart(
                             f"{rate:.2f}",
                             ha="center",
                             va="bottom",
-                            fontsize=8,
+                            fontsize=6.5,
                             rotation=0,
                         )
 
             ax.set_xlim(-0.5, len(shifts) - 0.5)
-            ax.set_ylim(0, 1.05)
+            ax.set_ylim(0, 1.15)
             ax.set_xticks(shift_positions)
-            ax.set_xticklabels(shifts, rotation=45, ha="right")
-            ax.set_ylabel("Detection Rate" if layer_idx == 0 else "")
-            ax.grid(True, axis="y", alpha=0.3)
-            ax.set_axisbelow(True)
+            if encoder_idx == n_encoders - 1:
+                ax.set_xticklabels(
+                    [shift.replace("_", " ").title() for shift in shifts],
+                    rotation=30,
+                    ha="right",
+                )
+            else:
+                ax.set_xticklabels([])
+            ax.set_ylabel("Detection Rate" if layer_idx == 0 else "", labelpad=15)
 
             # Add layer title
             if encoder_idx == 0:
@@ -1151,9 +1161,9 @@ def plot_bootstrap_detection_rate_barchart(
             # Add encoder label on the left
             if layer_idx == 0:
                 ax.text(
-                    -0.35,
+                    -0.55,
                     0.5,
-                    encoder,
+                    encoder.replace("_", " ").title(),
                     transform=ax.transAxes,
                     rotation=90,
                     ha="center",
@@ -1428,7 +1438,7 @@ def plot_kl_scatter(
     output_dir: Path, dataset: str, encoder_to_evaluate: str, kl_divs: dict[str, float]
 ) -> None:
     """
-    Plot a scatter graph of KL divergences across shifts, 
+    Plot a scatter graph of KL divergences across shifts,
     connecting points for each shift group (e.g., x_* and y_*).
     """
 
