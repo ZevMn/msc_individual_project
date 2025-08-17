@@ -213,7 +213,8 @@ def run_multi_detection_identification(
     alpha=0.05,
     num_classes=2,
     is_embed=False,
-    encoder_name="",
+    encoder_name: str="",
+    run_extended: bool=False,
 ):
     """
     Runs shift detection/identification multiple times for evaluation.
@@ -266,6 +267,7 @@ def run_multi_detection_identification(
                     is_embed=is_embed,
                     encoder_name=encoder_name,
                 )
+                
                 outputs.update({"n_test": test_size, "boot": i, "val_size": val_size})
                 print(outputs)
                 current = pd.DataFrame(outputs, index=[0])

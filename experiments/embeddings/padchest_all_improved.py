@@ -81,6 +81,7 @@ def run_padchest(model_to_evaluate, encoder_to_evaluate, shift):
                 val_sizes=val_sizes,
                 num_classes=n_cls,
                 encoder_name="simclr_modality_specific",
+                run_extended=True,
             )
         base_final_result = (
             res["final_identified_shift"].iloc[0]
