@@ -1,17 +1,18 @@
-import pandas as pd
 from pathlib import Path
 
-from experiments.inference_utils import get_or_save_outputs, get_ids_from_model_names
-from shift_identification_detection.shift_identification import (
-    run_multi_detection_identification,
-    ALL_SHIFTS,
-)
-from torch.utils.data import DataLoader
-import torch
 import numpy as np
+import pandas as pd
+import torch
+from torch.utils.data import DataLoader
+
 from data_handling.xray import PadChestDataset
 from experiments import shift_generator
 from experiments.embeddings.config import Config
+from experiments.inference_utils import get_ids_from_model_names, get_or_save_outputs
+from shift_identification_detection.shift_identification import (
+    ALL_SHIFTS,
+    run_multi_detection_identification,
+)
 
 
 def run_padchest(model_to_evaluate, encoder_to_evaluate, shift):
@@ -80,8 +81,7 @@ def run_padchest(model_to_evaluate, encoder_to_evaluate, shift):
                 test_sizes=test_sizes,
                 val_sizes=val_sizes,
                 num_classes=n_cls,
-                encoder_name="simclr_modality_specific",
-                run_extended=True,
+                layer="final_layer",
             )
             comparative_res = run_multi_detection_identification(
                 task_output,
@@ -92,7 +92,7 @@ def run_padchest(model_to_evaluate, encoder_to_evaluate, shift):
                 test_sizes=test_sizes,
                 val_sizes=val_sizes,
                 num_classes=n_cls,
-                encoder_name="simclr_imagenet",
+                layer="layer_2",
             )
 
             for idx, base_final_result in enumerate(res["final_identified_shift"]):
@@ -103,7 +103,9 @@ def run_padchest(model_to_evaluate, encoder_to_evaluate, shift):
 
                     comp_final_result = comparative_res["final_identified_shift"][idx]
                     suffix = (
-                        "acquisition" if comp_final_result == base_final_result else "gender"
+                        "acquisition"
+                        if comp_final_result == base_final_result
+                        else "gender"
                     )
                     res["final_identified_shift"] = base_final_result.replace(
                         "Covariate", f"Covariate ({suffix})"

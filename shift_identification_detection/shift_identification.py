@@ -75,7 +75,7 @@ def run_shift_identification(
     num_classes=2,
     alpha=0.05,
     is_embed=False,
-    encoder_name="",
+    layer: str="final_layer",
 ):
     """
     Runs one iteration shift identification/detection tests for a fixed reference and test set.
@@ -98,12 +98,6 @@ def run_shift_identification(
     _, val_embeddings, test_embeddings = validate_and_process_embeddings(
         encoder_output=encoder_output
     )
-
-    ############################################
-    layer = "final_layer"
-    if encoder_name == "simclr_imagenet":
-        layer = "layer_1"
-    ############################################
 
     encoder_feats_val = val_embeddings[layer][val_idx]
     probas_val = task_output["val"]["probas"][val_idx] + 1e-16
@@ -208,8 +202,7 @@ def run_multi_detection_identification(
     alpha: float = 0.05,
     num_classes: int = 2,
     is_embed: bool = False,
-    encoder_name: str = "",
-    run_extended: bool = False,
+    layer: str = "final_layer",
 ) -> pd.DataFrame:
     """
     Runs shift detection/identification multiple times for evaluation.
@@ -260,7 +253,7 @@ def run_multi_detection_identification(
                     alpha=alpha,
                     num_classes=num_classes,
                     is_embed=is_embed,
-                    encoder_name=encoder_name,
+                    layer=layer,
                 )
 
                 outputs.update({"n_test": test_size, "boot": i, "val_size": val_size})
