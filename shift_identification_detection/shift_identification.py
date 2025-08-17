@@ -1,16 +1,16 @@
 import time
-import numpy as np
-import torch
 
+import numpy as np
+import pandas as pd
+import torch
+from sklearn.decomposition import PCA
 from tqdm.autonotebook import tqdm
 
-import pandas as pd
+from shift_identification_detection.bbsd_tests import run_bbsd
 from shift_identification_detection.mmd_test import run_mmd_permutation_test
 from shift_identification_detection.prevalence_shift_adaptation import (
     get_cpmcn_probabilities,
 )
-from sklearn.decomposition import PCA
-from shift_identification_detection.bbsd_tests import run_bbsd
 
 ALL_SHIFTS = [
     "prevalence",
@@ -111,13 +111,8 @@ def run_shift_identification(
     encoder_feats_test = test_embeddings[layer][idx_shifted]
     probas_test = task_output["test"]["probas"][idx_shifted] + 1e-16
 
-    assert (
-        task_output["test"]["probas"].shape[0]
-        == test_embeddings[layer].shape[0]
-    )
-    assert (
-        task_output["val"]["probas"].shape[0] == val_embeddings[layer].shape[0]
-    )
+    assert task_output["test"]["probas"].shape[0] == test_embeddings[layer].shape[0]
+    assert task_output["val"]["probas"].shape[0] == val_embeddings[layer].shape[0]
     n_val = encoder_feats_val.shape[0]
 
     # Run BBSD
@@ -207,15 +202,15 @@ def run_multi_detection_identification(
     encoder_output,
     shift_generating_func,
     source_resampling_func,
-    val_sizes=[None],
-    test_sizes=[None],
-    n_boostraps=5,
-    alpha=0.05,
-    num_classes=2,
-    is_embed=False,
-    encoder_name: str="",
-    run_extended: bool=False,
-):
+    val_sizes: list[int] | list[None] = [None],
+    test_sizes: list[int] | list[None] = [None],
+    n_boostraps: int = 5,
+    alpha: float = 0.05,
+    num_classes: int = 2,
+    is_embed: bool = False,
+    encoder_name: str = "",
+    run_extended: bool = False,
+) -> pd.DataFrame:
     """
     Runs shift detection/identification multiple times for evaluation.
     Performs test set sampling according to `shift_generating_func`,
@@ -267,7 +262,7 @@ def run_multi_detection_identification(
                     is_embed=is_embed,
                     encoder_name=encoder_name,
                 )
-                
+
                 outputs.update({"n_test": test_size, "boot": i, "val_size": val_size})
                 print(outputs)
                 current = pd.DataFrame(outputs, index=[0])

@@ -83,16 +83,6 @@ def run_padchest(model_to_evaluate, encoder_to_evaluate, shift):
                 encoder_name="simclr_modality_specific",
                 run_extended=True,
             )
-        base_final_result = (
-            res["final_identified_shift"].iloc[0]
-            if isinstance(res, pd.DataFrame)
-            else res["final_identified_shift"]
-        )
-        print(f"final result detected: {base_final_result}.")
-
-
-        if base_final_result in ("Covariate only", "Covariate + Prevalence"):
-            print("Determining root cause of covariate shift.")
             comparative_res = run_multi_detection_identification(
                 task_output,
                 simclr_imagenet_encoder_output,
@@ -104,15 +94,21 @@ def run_padchest(model_to_evaluate, encoder_to_evaluate, shift):
                 num_classes=n_cls,
                 encoder_name="simclr_imagenet",
             )
-            comp_final_result = comparative_res["final_identified_shift"]
 
-            suffix = (
-                "acquisition" if comp_final_result == base_final_result else "gender"
-            )
-            res["final_identified_shift"] = base_final_result.replace(
-                "Covariate", f"Covariate ({suffix})"
-            )
-            print(f"Shift is: {res['final_identified_shift']}")
+            for idx, base_final_result in enumerate(res["final_identified_shift"]):
+                print(f"Base final result: {base_final_result}.")
+
+                if base_final_result in ("Covariate only", "Covariate + Prevalence"):
+                    print("Determining root cause of covariate shift.")
+
+                    comp_final_result = comparative_res["final_identified_shift"][idx]
+                    suffix = (
+                        "acquisition" if comp_final_result == base_final_result else "gender"
+                    )
+                    res["final_identified_shift"] = base_final_result.replace(
+                        "Covariate", f"Covariate ({suffix})"
+                    )
+                    print(f"Shift is: {res['final_identified_shift']}")
 
         if isinstance(res, dict):
             pd.DataFrame([res]).to_csv(filename, index=False)
