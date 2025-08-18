@@ -107,10 +107,10 @@ def run_padchest(model_to_evaluate, encoder_to_evaluate, shift):
                         if comp_final_result == base_final_result
                         else "gender"
                     )
-                    res["final_identified_shift"] = base_final_result.replace(
+                    res["final_identified_shift"][idx] = base_final_result.replace(
                         "Covariate", f"Covariate ({suffix})"
                     )
-                    print(f"Shift is: {res['final_identified_shift']}")
+                    print(f"Shift is: {res['final_identified_shift'][idx]}")
 
         if isinstance(res, dict):
             pd.DataFrame([res]).to_csv(filename, index=False)
