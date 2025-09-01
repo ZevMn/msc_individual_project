@@ -1,32 +1,9 @@
 """
-Entry point script to run experiments which analyse feature embeddings representations,
-extracted from multiple layers of pre-trained encoders across several medical imaging datasets.
-
-Command-line arguments (all optional - fall back to in-file defaults):
-    --encoder_to_evaluate   Encoder identifier: keys of 'Config.ENCODERS'.
-    --feat_mode             Feature mode: keys of 'Config.FEAT_MODES_MAP'.
-    --dataset               Dataset name: keys of 'Config.DATASET_CONFIG'.
-
-Note: If you change 'feat_mode' after embeddings have already been saved, delete 
-      the existing '*.pkl' file for that dataset and encoder before re-running.
-
-Example usage:
---------------
-# Use defaults declared below
-    python experiments/embeddings/main.py
-
-# Override settings from the CLI
-    python experiments/embeddings/main.py \
-        --encoder_to_evaluate imagenet \
-        --feat_mode all \
-        --dataset Mammo
-"""
-"""
 experiments/embeddings/main.py
 
 Entry point script to run experiments which analyse feature embedding representations
 extracted from multiple layers of pre-trained encoders, and across several medical imaging 
-datasets. Experiments can be launched via CLI with configurable arguments.
+datasets. The script can be launched via CLI with configurable arguments.
 
 Command-line arguments (optional, with defaults below):
     --encoder_to_evaluate   Encoder identifier (keys of Config.ENCODERS).
