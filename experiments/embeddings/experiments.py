@@ -1,14 +1,6 @@
 """
 experiments/embeddings/experiment.py
 
-Example usage:
---------------
-    run_*_experiment(encoder_to_evaluate="imagenet", feat_mode="all", dataset="Mammo")
-"""
-
-"""
-experiments/embeddings/experiment.py
-
 Defines the four core experiment workflows for analysing embeddings across datasets:
     1. Visualisation of embeddings and shifts.
     2. Shift quantification using KL divergence.
