@@ -1,44 +1,28 @@
 """
 experiments/embeddings/plotting_utils.py
 
-Utilities to visualise and statistically compare embedding spaces across encoder
-layers and distribution shifts.
-
-The module provides:
-    - Helpers to concatenate embeddings and compute PCA/t-SNE projections.
-    - High-level plotting routines (scatter plots and joint plots) for individual
-      layers or across layers, optionally coloured by labels or shift type.
-    - A thin wrapper to run MMD permutation tests for distribution shift
-      detection.
-
-Typical workflow:
-    1. Create a 'PlotInputs' instance bundling embeddings and metadata.
-    2. Call 'plot_all_layers_labelled_scatter' to visualise each layer by labels.
-    3. Call 'plot_shift_comparison_scatter' or 'plot_shift_comparison_joint'
-       to compare reference vs shifted distributions.
-    4. Optionally enable statistical tests via 'calculate_all_shift_metrics'.
+Plotting functions to visualise and analyse results from the experiments
+found in 'experiments.py'.
 """
 
 import re
 from pathlib import Path
 
-import math
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
 from typing import List, Optional
-from matplotlib.figure import Figure
-import matplotlib.gridspec as gridspec
 from matplotlib.axes import Axes
 import matplotlib.lines as mlines
 
 from experiments.embeddings.config import Config, PlotConfig
+from experiments.embeddings.statistical_utils import calculate_separability_score
 
 
-# ----------------
-# Helper functions
-# ----------------
+# --------------------------------------------
+# Helper function: Set consistent plot styling
+# --------------------------------------------
 def set_plot_style() -> None:
     """
     Apply a consistent seaborn/matplotlib style to all subsequent plots.
@@ -47,233 +31,9 @@ def set_plot_style() -> None:
     plt.rcParams.update({"font.family": "serif"})
 
 
-def title_and_save_fig(
-    title: str, fig: Figure, file_location: Path, file_name: str, fontsize: int = 16
-) -> None:
-    """
-    Set a figure title, ensure 'file_location' exists, save PNG, and close.
-
-    Args:
-        title: Figure suptitle.
-        fig: Matplotlib Figure to save.
-        file_location: Target directory (created if needed).
-        file_name: Output file name (include extension).
-        fontsize: Title font size.
-    """
-    fig.suptitle(title, fontsize=fontsize)
-    file_location.mkdir(parents=True, exist_ok=True)
-    fig.savefig(file_location / file_name, dpi=400, bbox_inches="tight")
-    plt.close(fig)
-    print(f"[Saved] {file_name}\n")
-
-
-# ------------------
-# Plotting functions
-# ------------------
-def plot_layer_representations_scatter(
-    output_dir: Path,
-    dataset: str,
-    encoder_to_evaluate: str,
-    layer_to_results_dict: dict[str, pd.DataFrame],
-    labels: dict[str, np.ndarray],
-    shift: str = "no_shift",
-    seed: int = Config.SEED,
-    n_samples: int = 2000,
-) -> None:
-    """
-    Plots PCA and t-SNE projections for all layers' embeddings, creating separate
-    figures for PCA and t-SNE. Each figure has layers as rows and label types as columns.
-
-    Args:
-        output_dir: Directory where the plot PNGs will be saved.
-        inputs: VisPlotInputs object containing data for plotting.
-        labels: Dict mapping column name to a NumPy array (of same length as 'layer_embeddings[layer]')
-            with categorical labels to colour points.
-        shift: String identifier for the simulated shift (or "no_shift" for reference data).
-        seed: Random seed for reproducibility of sampling points for plotting.
-        n_samples: Maximum number of points to include in the plot.
-    """
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    set_plot_style()
-
-    layers = layer_to_results_dict.keys()
-    columns = Config.DATASET_CONFIG[dataset]["plot_columns"]
-    n_rows = len(layers)
-    n_cols = len(columns)
-
-    embeddings_data: dict[str, pd.DataFrame] = {}
-
-    # Build PCA and t-SNE dataframe for plotting for all layers
-    for layer in layers:
-        layer_df = layer_to_results_dict[layer].query("Shift == @shift").copy()
-        if len(layer_df) == 0:
-            raise ValueError(f"No data found for layer {layer}")
-
-        layer_df = layer_df.assign(**{col: labels[col] for col in columns})
-
-        if dataset == "Mammo" and "Manufacturer" in layer_df.columns:
-            # Replace manufacturer names with numbers or they spill over the legend
-            layer_df["Manufacturer"] = (
-                layer_df["Manufacturer"].astype("category").cat.codes
-            )
-
-        embeddings_data[layer] = layer_df.sample(
-            n=min(n_samples, len(layer_df)), random_state=seed
-        )
-
-    main_title = (
-        f"{dataset} | {encoder_to_evaluate.title()} | {shift.replace('_', ' ').title()}"
-    )
-
-    # Create PCA figure
-    print("\nCreating PCA visualization...")
-    fig_pca = plt.figure(
-        figsize=(4 * n_cols, 3 * n_rows + 2),
-        constrained_layout=True,
-    )
-
-    # Add main title for PCA
-    fig_pca.suptitle(
-        f"PCA Feature Representation: {main_title}",
-        fontsize=16,
-        fontweight="bold",
-        y=0.98,
-    )
-
-    # Create subplot grid for PCA
-    gs_pca = fig_pca.add_gridspec(
-        n_rows, n_cols, top=0.90, left=0.08, right=0.95, hspace=0.3, wspace=0.4
-    )
-
-    # Plot PCA subplots
-    for row_idx, layer in enumerate(layers):
-        sample = embeddings_data[layer]
-
-        for col_idx, column in enumerate(columns):
-            ax = fig_pca.add_subplot(gs_pca[row_idx, col_idx])
-
-            sns.scatterplot(
-                data=sample,
-                x="PCA 1",
-                y="PCA 2",
-                hue=column,
-                palette=PlotConfig.COLOR_PALETTE,
-                alpha=PlotConfig.ALPHA,
-                s=PlotConfig.MARKER_SIZE,
-                ax=ax,
-                legend=(row_idx == 0),
-            )
-
-            # Position legend at top of column
-            if row_idx == 0 and ax.get_legend():
-                ax.legend(
-                    loc="upper center",
-                    bbox_to_anchor=(0.5, 1.4),
-                    ncol=min(len(sample[column].unique()), 4),
-                    frameon=False,
-                    fontsize=9,
-                )
-
-            # Set titles and labels
-            if row_idx == 0:
-                ax.set_title(f"{column}", fontsize=14, fontweight="bold", pad=10)
-
-            if col_idx == 0:
-                ax.set_ylabel(
-                    f"{layer.replace('_', ' ').title()}",
-                    fontsize=12,
-                    fontweight="bold",
-                    labelpad=10,
-                )
-            else:
-                ax.set_ylabel("")
-            ax.set_xlabel("")
-
-    plt.tight_layout()
-
-    # Save PCA figure
-    pca_filename = f"{dataset}_{encoder_to_evaluate}_pca_{shift}.png"
-    fig_pca.savefig(
-        output_dir / pca_filename, dpi=300, bbox_inches="tight", facecolor="white"
-    )
-    plt.close(fig_pca)
-
-    print(f"[Saved] {pca_filename}\n")
-
-    # Create t-SNE figure
-    print("Creating t-SNE visualization...")
-    fig_tsne = plt.figure(figsize=(4 * n_cols, 3 * n_rows + 2), constrained_layout=True)
-
-    # Add main title for t-SNE
-    fig_tsne.suptitle(
-        f"t-SNE Feature Representation: {main_title}",
-        fontsize=16,
-        fontweight="bold",
-        y=0.98,
-    )
-
-    # Create subplot grid for t-SNE
-    gs_tsne = fig_tsne.add_gridspec(
-        n_rows, n_cols, top=0.90, left=0.08, right=0.95, hspace=0.3, wspace=0.4
-    )
-
-    # Plot t-SNE subplots
-    for row_idx, layer in enumerate(layers):
-        sample = embeddings_data[layer]
-
-        for col_idx, column in enumerate(columns):
-            ax = fig_tsne.add_subplot(gs_tsne[row_idx, col_idx])
-
-            sns.scatterplot(
-                data=sample,
-                x="t-SNE 1",
-                y="t-SNE 2",
-                hue=column,
-                palette=PlotConfig.COLOR_PALETTE,
-                alpha=PlotConfig.ALPHA,
-                s=PlotConfig.MARKER_SIZE,
-                ax=ax,
-                legend=(row_idx == 0),
-            )
-
-            # Position legend at top of column
-            if row_idx == 0 and ax.get_legend():
-                ax.legend(
-                    loc="upper center",
-                    bbox_to_anchor=(0.5, 1.4),
-                    ncol=min(len(sample[column].unique()), 4),
-                    frameon=False,
-                    fontsize=9,
-                )
-
-            # Set titles and labels
-            if row_idx == 0:
-                ax.set_title(f"{column}", fontsize=14, fontweight="bold", pad=10)
-
-            if col_idx == 0:
-                ax.set_ylabel(
-                    f"{layer.replace('_', ' ').title()}",
-                    fontsize=12,
-                    fontweight="bold",
-                    labelpad=10,
-                )
-            else:
-                ax.set_ylabel("")
-            ax.set_xlabel("")
-
-    plt.tight_layout()
-
-    # Save t-SNE figure
-    tsne_filename = f"{dataset}_{encoder_to_evaluate}_tsne_{shift}.png"
-    fig_tsne.savefig(
-        output_dir / tsne_filename, dpi=300, bbox_inches="tight", facecolor="white"
-    )
-    plt.close(fig_tsne)
-
-    print(f"[Saved] {tsne_filename}\n")
-
-
+# ---------------------------------------
+# Plot feature embeddings representations
+# ---------------------------------------
 def plot_layer_representations_jointplot(
     output_dir: Path,
     dataset: str,
@@ -299,6 +59,10 @@ def plot_layer_representations_jointplot(
         shift: String identifier for the simulated shift (or "no_shift" for reference data).
         seed: Random seed for reproducibility of sampling points for plotting.
         n_samples: Maximum number of points to include in the plot.
+
+
+    Saves: f"{dataset}_{encoder_to_evaluate}_pca_jointplot_{shift}.png"
+           f"{dataset}_{encoder_to_evaluate}_tsne_jointplot_{shift}.png"
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -329,9 +93,7 @@ def plot_layer_representations_jointplot(
             n=min(n_samples, len(layer_df)), random_state=seed
         )
 
-    main_title = (
-        f"{dataset} | {encoder_to_evaluate.title()} | {shift.replace('_', ' ').title()}"
-    )
+    main_title = f"{dataset.replace('Mammo', 'EMBED')} | {encoder_to_evaluate.replace('_', ' ').title()}"
 
     def create_jointplot_grid(x_col: str, y_col: str, method_name: str):
         """Helper function to create a jointplot-style grid for either PCA or t-SNE"""
@@ -344,9 +106,9 @@ def plot_layer_representations_jointplot(
         # Add main title
         fig.suptitle(
             f"{method_name} Feature Representation: {main_title}",
-            fontsize=16,
+            fontsize=28,
             fontweight="bold",
-            y=0.98,
+            y=0.97,
         )
 
         # Create outer grid
@@ -355,8 +117,8 @@ def plot_layer_representations_jointplot(
             ncols=n_cols,
             left=0.08,
             right=0.98,
-            top=0.90,
-            bottom=0.04,
+            top=0.89,
+            bottom=0.28,
             wspace=0.25,
             hspace=0.35,
         )
@@ -399,6 +161,8 @@ def plot_layer_representations_jointplot(
                     palette=pal,
                     alpha=PlotConfig.ALPHA,
                     s=PlotConfig.MARKER_SIZE,
+                    edgecolor="white",
+                    linewidth=0.35,
                     ax=ax_main,
                     legend=False,
                 )
@@ -414,8 +178,8 @@ def plot_layer_representations_jointplot(
                         ax=ax_top,
                         fill=True,
                         common_norm=False,
-                        alpha=0.35,
-                        linewidth=1,
+                        alpha=0.4,
+                        linewidth=1.25,
                         color=pal[cat],
                     )
 
@@ -426,8 +190,8 @@ def plot_layer_representations_jointplot(
                         ax=ax_right,
                         fill=True,
                         common_norm=False,
-                        alpha=0.35,
-                        linewidth=1,
+                        alpha=0.4,
+                        linewidth=1.25,
                         color=pal[cat],
                     )
 
@@ -437,6 +201,7 @@ def plot_layer_representations_jointplot(
                     ax.set_yticks([])
                     ax.set_xlabel("")
                     ax.set_ylabel("")
+                    ax.grid(False)
                     sns.despine(ax=ax, left=True, bottom=True)
 
                 # Set main axis labels
@@ -446,9 +211,9 @@ def plot_layer_representations_jointplot(
                 if col_idx == 0:
                     ax_main.set_ylabel(
                         f"{layer.replace('_', ' ').title()}",
-                        fontsize=12,
+                        fontsize=20,
                         fontweight="bold",
-                        labelpad=10,
+                        labelpad=12,
                     )
                 else:
                     ax_main.set_ylabel("")
@@ -456,9 +221,10 @@ def plot_layer_representations_jointplot(
                 # Column title on top row
                 if row_idx == 0:
                     ax_main.set_title(
-                        f"{column}", fontsize=14, fontweight="bold", y=1.65
+                        f"{column}", fontsize=22, fontweight="bold", y=1.4
                     )
 
+                if row_idx == len(layers) - 1:
                     # Add legend for top row
                     handles, legend_labels = [], []
                     for cat in unique_cats:
@@ -467,9 +233,10 @@ def plot_layer_representations_jointplot(
                             [],
                             marker="o",
                             linestyle="",
-                            markersize=np.sqrt(PlotConfig.MARKER_SIZE),
                             markerfacecolor=pal[cat],
-                            markeredgecolor="none",
+                            markeredgecolor="white",
+                            markeredgewidth=0.5,
+                            markersize=8,
                             alpha=PlotConfig.ALPHA,
                         )
                         handles.append(h)
@@ -479,15 +246,20 @@ def plot_layer_representations_jointplot(
                         handles,
                         legend_labels,
                         title=column,
-                        frameon=False,
-                        loc="lower center",
-                        bbox_to_anchor=(0.5, 1.42),
+                        loc="upper center",
+                        bbox_to_anchor=(0.5, -0.3),
                         ncol=min(4, len(legend_labels)),
-                        fontsize=9,
-                        title_fontsize=11,
+                        fontsize=18,
+                        title_fontsize=20,
+                        frameon=False,
+                        framealpha=0.95,
+                        facecolor="white",
+                        edgecolor="gray",
                         borderaxespad=0.0,
+                        columnspacing=1.0,
+                        handlelength=1.5,
+                        handletextpad=0.5,
                     )
-                    leg.set_in_layout(False)
 
                 sns.despine(ax=ax_main)
 
@@ -519,113 +291,9 @@ def plot_layer_representations_jointplot(
     print(f"[Saved] {tsne_filename}\n")
 
 
-def plot_shift_comparison_scatter(
-    output_dir: Path,
-    dataset: str,
-    encoder_to_evaluate: str,
-    layer_to_results_dict: dict,
-    n_samples=2000,
-) -> None:
-    """
-    Generate a single figure with a grid of PCA and t-SNE scatterplots per layer
-    to compare embedding spaces across layers and shifts.
-    """
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    set_plot_style()
-
-    layers = layer_to_results_dict.keys()
-    n_layers = len(layers)
-
-    print("\nCreating scatterplots for shift comparison...")
-    fig = plt.figure(figsize=PlotConfig.get_figsize(n_layers, permute=True))
-    gs = gridspec.GridSpec(2, n_layers, figure=fig, hspace=0.35, wspace=0.25)
-
-    handles_legend, labels_legend = None, None
-
-    for i, layer in enumerate(layers):
-
-        layer_df = layer_to_results_dict[layer]
-
-        # Filter for moderate shifts only (and no shift)
-        moderate_shifts = [
-            shift
-            for shift in layer_df["Shift"].unique()
-            if "moderate" in shift or shift == "no_shift"
-        ]
-        filtered_shifts_df = layer_df[layer_df["Shift"].isin(moderate_shifts)].copy()
-
-        filtered_shifts_df = filtered_shifts_df.sample(frac=1, random_state=42)
-        sample = filtered_shifts_df.sample(
-            n=min(n_samples, len(filtered_shifts_df)), random_state=42
-        )
-
-        clean_layer = layer.replace("_", " ").title()
-
-        # PCA subplot
-        ax_pca = fig.add_subplot(gs[0, i])
-        sc = sns.scatterplot(
-            data=sample,
-            x="PCA 1",
-            y="PCA 2",
-            hue="Shift",
-            style="Shift",
-            palette=PlotConfig.COLOR_PALETTE,
-            s=PlotConfig.MARKER_SIZE,
-            alpha=PlotConfig.ALPHA,
-            ax=ax_pca,
-            legend="brief",
-        )
-        ax_pca.set_title(f"{clean_layer} (PCA)", fontsize=11, fontweight="bold")
-        ax_pca.set_xlabel("")
-        ax_pca.set_ylabel("")
-
-        if i == 0:
-            handles_legend, labels_legend = sc.get_legend_handles_labels()
-        if ax_pca.legend_:
-            ax_pca.legend_.remove()
-
-        # t-SNE subplot
-        ax_tsne = fig.add_subplot(gs[1, i])
-        sns.scatterplot(
-            data=sample,
-            x="t-SNE 1",
-            y="t-SNE 2",
-            hue="Shift",
-            style="Shift",
-            palette=PlotConfig.COLOR_PALETTE,
-            s=PlotConfig.MARKER_SIZE,
-            alpha=PlotConfig.ALPHA,
-            ax=ax_tsne,
-            legend=False,
-        )
-        ax_tsne.set_title(f"{clean_layer} (t-SNE)", fontsize=11, fontweight="bold")
-        ax_tsne.set_xlabel("")
-        ax_tsne.set_ylabel("")
-
-    if handles_legend and labels_legend and len(labels_legend) > 0:
-        fig.subplots_adjust(top=0.88)
-        fig.legend(
-            handles_legend,
-            labels_legend,
-            loc="upper center",
-            ncol=len(labels_legend),
-            frameon=False,
-            bbox_to_anchor=(0.5, 0.95),
-            bbox_transform=fig.transFigure,
-            fontsize=10,
-            columnspacing=1.0,
-            handletextpad=0.5,
-        )
-
-    title_and_save_fig(
-        f"Shift Comparison: {dataset} | {encoder_to_evaluate.title()}",
-        fig,
-        output_dir,
-        f"{dataset}_{encoder_to_evaluate}_shift_comparison_scatter.png",
-    )
-
-
+# -----------------------------------------
+# Plot shift representations for comparison
+# -----------------------------------------
 def plot_shift_comparison_joint(
     output_dir: Path,
     dataset: str,
@@ -636,12 +304,7 @@ def plot_shift_comparison_joint(
     """
     Grid of 'jointplot-style' panels (scatter + filled KDE marginals) for PCA and t-SNE.
     One row per layer, two columns: PCA (left) and t-SNE (right). A single legend is
-    shown above each column (once).
-
-    Preserves the look of the old jointplots:
-      - seaborn scatter with hue="Shift"
-      - filled KDE marginals with common_norm=False (per-class areas aren't normalized)
-      - alpha/marker size/palette taken from PlotConfig
+    shown above each column.
 
     Saves:  {dataset}-{encoder}-shift_comparison_jointgrid.png
     """
@@ -656,10 +319,10 @@ def plot_shift_comparison_joint(
     print("\nCreating jointplots for shift comparison...")
     fig = plt.figure(figsize=(6 * n_cols, 4 * n_rows + 2), constrained_layout=False)
     fig.suptitle(
-        f"Shift Comparison: {dataset} | {encoder_to_evaluate.title()}",
-        fontsize=16,
+        f"Shift Comparison: {dataset.replace('Mammo', 'EMBED')} | {encoder_to_evaluate.replace('_', ' ').title()}",
+        fontsize=22,
         fontweight="bold",
-        y=0.98,
+        y=0.97,
     )
 
     outer = fig.add_gridspec(
@@ -667,8 +330,8 @@ def plot_shift_comparison_joint(
         ncols=n_cols,
         left=0.08,
         right=0.98,
-        top=0.90,
-        bottom=0.04,
+        top=0.92,
+        bottom=0.28,
         wspace=0.30,
         hspace=0.40,
     )
@@ -679,15 +342,14 @@ def plot_shift_comparison_joint(
 
         layer_df = layer_to_results_dict[layer]
 
-        # Filter for moderate shifts only (and no shift)
-        moderate_shifts = [
+        # Filter for extreme shifts only (and no shift)
+        extreme_shifts = [
             shift
             for shift in layer_df["Shift"].unique()
-            if "moderate" in shift or shift == "no_shift"
+            if "extreme" in shift or shift == "no_shift"
         ]
-        filtered_shifts_df = layer_df[layer_df["Shift"].isin(moderate_shifts)].copy()
+        filtered_shifts_df = layer_df[layer_df["Shift"].isin(extreme_shifts)].copy()
 
-        filtered_shifts_df = filtered_shifts_df.sample(frac=1, random_state=42)
         sample = filtered_shifts_df.sample(
             n=min(n_samples, len(filtered_shifts_df)), random_state=42
         )
@@ -697,6 +359,24 @@ def plot_shift_comparison_joint(
             PlotConfig.COLOR_PALETTE, n_colors=len(unique_shifts)
         )
         pal = {k: v for k, v in zip(unique_shifts, palette)}
+
+        # Format legend shift labels
+        display_labels = [
+            shift.replace("_extreme", "").replace("extreme_", "").replace("_", " ")
+            for shift in unique_shifts
+        ]
+        if dataset == "PadChest":
+            display_labels = [
+                shift.replace("sample", "acq") for shift in display_labels
+            ]
+        if dataset == "Retina":
+            display_labels = [
+                shift.replace("subpop", "prev") for shift in display_labels
+            ]
+        display_labels = [
+            shift.replace("acq", "acquisition").replace("prev", "prevalence")
+            for shift in display_labels
+        ]
 
         # ---- helper for one panel ----
         def joint_panel(
@@ -763,41 +443,45 @@ def plot_shift_comparison_joint(
             ax_main.set_ylabel(
                 layer.replace("_", " ").title() if show_row_label else "",
                 fontweight="bold",
+                labelpad=10,
             )
 
             if title_if_top:
-                ax_main.set_title(title_if_top, fontsize=14, fontweight="bold", y=1.65)
+                ax_main.set_title(title_if_top, fontsize=18, fontweight="bold", y=1.35)
 
             sns.despine(ax=ax_main)
 
             if draw_legend:
                 handles, labels = [], []
-                for s in unique_shifts:
+                for i, s in enumerate(unique_shifts):
                     h = mlines.Line2D(
                         [],
                         [],
                         marker="o",
                         linestyle="",
-                        markersize=np.sqrt(PlotConfig.MARKER_SIZE),
                         markerfacecolor=pal[s],
-                        markeredgecolor="none",
-                        alpha=PlotConfig.ALPHA,
+                        markeredgecolor="white",
+                        markeredgewidth=0.5,
+                        alpha=1.0,
+                        markersize=8,
                     )
                     handles.append(h)
-                    labels.append(s)
+                    labels.append(display_labels[i])
                 leg = ax_main.legend(
                     handles,
                     labels,
                     title="Shift",
                     frameon=False,
-                    loc="lower center",
-                    bbox_to_anchor=(0.5, 1.42),
+                    framealpha=0.95,
+                    facecolor="white",
+                    edgecolor="gray",
+                    loc="upper center",
+                    bbox_to_anchor=(0.5, -0.25),
                     ncol=min(4, len(labels)),
-                    fontsize=9,
-                    title_fontsize=11,
+                    fontsize=12,
+                    title_fontsize=14,
                     borderaxespad=0.0,
                 )
-                leg.set_in_layout(False)
 
             return ax_main
 
@@ -808,7 +492,7 @@ def plot_shift_comparison_joint(
             "PCA 1",
             "PCA 2",
             title_if_top=title_left,
-            draw_legend=(i == 0),
+            draw_legend=(i == len(layers) - 1),
             show_row_label=True,
         )
         if i == 0:
@@ -821,7 +505,7 @@ def plot_shift_comparison_joint(
             "t-SNE 1",
             "t-SNE 2",
             title_if_top=title_right,
-            draw_legend=(i == 0),
+            draw_legend=(i == len(layers) - 1),
             show_row_label=False,
         )
         if i == 0:
@@ -836,6 +520,9 @@ def plot_shift_comparison_joint(
     print(f"[Saved] {filename}")
 
 
+# ---------------------------------------------------------------
+# Plots to display results from initial detection rate experiment
+# ---------------------------------------------------------------
 def plot_detection_rate_heatmap(
     output_dir: Path,
     dataset: str,
@@ -851,6 +538,7 @@ def plot_detection_rate_heatmap(
         dataset: Name of the dataset being analysed.
         encoder_to_evaluate: Name of the encoder used to generate features.
 
+    Saves: f"{dataset}_{encoder_to_evaluate}_detection_rate_heatmap"
     """
 
     set_plot_style()
@@ -887,8 +575,6 @@ def plot_detection_rate_heatmap(
         vmin=0.05,
         vmax=1,
     )
-    # for i, j in zip(*np.where(s_arr)):
-    #     ax.add_patch(Rectangle((j, i), 1, 1, fill=False, edgecolor='black', lw=2))
 
     # Clean up labels
     ax.set_ylabel("Shift", fontsize=14)
@@ -896,12 +582,17 @@ def plot_detection_rate_heatmap(
     ax.set_xticklabels(pvals.columns, rotation=45, ha="right")
     ax.set_yticklabels(clean_idx, rotation=0)
 
-    title_and_save_fig(
-        f"Shift Detection Rate Heatmap: {dataset} | {encoder_to_evaluate.replace('_', ' ').title()}",
-        fig,
-        output_dir,
-        f"{dataset}_{encoder_to_evaluate}_detection_rate_heatmap",
+    fig.suptitle(
+        f"Shift Detection Rate Heatmap: {dataset.replace('Mammo', 'EMBED')} | {encoder_to_evaluate.replace('_', ' ').title()}",
+        fontsize=16,
     )
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    file_name = f"{dataset}_{encoder_to_evaluate}_detection_rate_heatmap"
+    fig.savefig(output_dir / file_name, dpi=400, bbox_inches="tight")
+    plt.close(fig)
+
+    print(f"[Saved] {file_name}\n")
 
 
 def plot_detection_rate_linegraph(
@@ -919,6 +610,7 @@ def plot_detection_rate_linegraph(
         dataset: Name of the dataset being analysed.
         encoder_to_evaluate: Name of the encoder used to generate features.
 
+    Saves: f"{dataset}_{encoder_to_evaluate}_detection_rate_line_graph"
     """
     set_plot_style()
 
@@ -959,14 +651,22 @@ def plot_detection_rate_linegraph(
     ax.axhline(0.05, color="red", linestyle="--", label="Significance Threshold (0.05)")
     ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
 
-    title_and_save_fig(
-        f"Shift Detection Rate Line Graph: {dataset} | {encoder_to_evaluate.replace('_', ' ').title()}",
-        fig,
-        output_dir,
-        f"{dataset}_{encoder_to_evaluate}_detection_rate_line_graph",
+    fig.suptitle(
+        f"Shift Detection Rate Line Graph: {dataset.replace('Mammo', 'EMBED')} | {encoder_to_evaluate.replace('_', ' ').title()}",
+        fontsize=16,
     )
 
+    output_dir.mkdir(parents=True, exist_ok=True)
+    file_name = f"{dataset}_{encoder_to_evaluate}_detection_rate_line_graph"
+    fig.savefig(output_dir / file_name, dpi=400, bbox_inches="tight")
+    plt.close(fig)
 
+    print(f"[Saved] {file_name}\n")
+
+
+# -----------------------------------------------------------------
+# Plots to display results from bootstrap detection rate experiment
+# -----------------------------------------------------------------
 def plot_all_bootstrap_results(
     output_dir: Path,
 ) -> None:
@@ -1037,6 +737,8 @@ def plot_bootstrap_detection_rate_barchart(
         dataset: Name of the dataset to plot results for.
         all_results_df: DataFrame containing bootstrap results with columns:
                    ['dataset', 'encoder', 'shift', 'layer', 'test_size', 'detection_rate', ...]
+
+    Saves: f"bootstrap_detection_rates_{dataset}.png"
     """
 
     # Check if required columns are present
@@ -1050,8 +752,18 @@ def plot_bootstrap_detection_rate_barchart(
     layers = ["after_maxpool", "layer_1", "layer_2", "layer_3", "final_layer"]
     test_sizes = sorted(all_results_df["test_size"].unique())
 
+    all_results_df["shift"] = all_results_df["shift"].str.lower().str.strip()
     shift_order = ["subtle", "moderate", "extreme"]
-    shifts = [s for s in shift_order if s in all_results_df["shift"].unique()]
+
+    def sort_key(s: str):
+        parts = s.split("_")
+        if len(parts) == 2:
+            prefix, suffix = parts
+            return (prefix, shift_order.index(suffix))
+        else:
+            return (s, 999)
+
+    shifts = sorted(all_results_df["shift"].unique(), key=sort_key)
 
     # Create figure and subplots
     colors = plt.get_cmap("Set3")(np.linspace(0, 1, len(test_sizes)))
@@ -1097,7 +809,9 @@ def plot_bootstrap_detection_rate_barchart(
                 for shift in shifts:
                     shift_data = size_data[size_data["shift"] == shift]
                     if len(shift_data) > 0:
-                        detection_rates.append(shift_data["detection_rate"].iloc[0])
+                        detection_rates.append(
+                            shift_data["detection_rate"].iloc[0] * 100
+                        )
                         valid_shifts_for_size.append(shift)
                 # Skip this test_size if no shifts have data for it
                 if not detection_rates:
@@ -1128,34 +842,58 @@ def plot_bootstrap_detection_rate_barchart(
 
                 # Add value labels on bars if detection rate > 0
                 for bar, rate in zip(bars, detection_rates):
-                    if rate > 0.05:  # Only label if detection rate is substantial
+                    if rate == 100:
                         ax.text(
                             bar.get_x() + bar.get_width() / 2,
                             bar.get_height() + 0.01,
-                            f"{rate:.2f}",
+                            "*",
                             ha="center",
                             va="bottom",
                             fontsize=6.5,
                             rotation=0,
                         )
+                    if (
+                        rate > 5 and rate < 100
+                    ):  # Only label if detection rate is substantial
+                        ax.text(
+                            bar.get_x() + bar.get_width() / 2,
+                            bar.get_height() + 0.01,
+                            f"{rate:.0f}",
+                            ha="center",
+                            va="bottom",
+                            fontsize=6,
+                            rotation=0,
+                        )
 
-            ax.set_xlim(-0.5, len(shifts) - 0.5)
-            ax.set_ylim(0, 1.15)
+            if len(shifts) > 0:
+                ax.set_xlim(-0.5, len(shifts) - 0.5)
+            else:
+                ax.set_xlim(-0.5, 0.5)
+            ax.set_ylim(0, 110)
             ax.set_xticks(shift_positions)
             if encoder_idx == n_encoders - 1:
                 ax.set_xticklabels(
-                    [shift.replace("_", " ").title() for shift in shifts],
+                    [
+                        shift.replace("_", " ").replace("sample", "acq").title()
+                        for shift in shifts
+                    ],
                     rotation=30,
                     ha="right",
                 )
+                ax.set_xlabel("Shift", fontsize=12, labelpad=15)
             else:
                 ax.set_xticklabels([])
-            ax.set_ylabel("Detection Rate" if layer_idx == 0 else "", labelpad=15)
+            ax.set_ylabel(
+                "Detection Rate (%)" if layer_idx == 0 else "", labelpad=15, fontsize=12
+            )
 
             # Add layer title
             if encoder_idx == 0:
                 ax.set_title(
-                    layer.replace("_", " ").title(), fontsize=12, fontweight="bold"
+                    layer.replace("_", " ").title(),
+                    fontsize=16,
+                    fontweight="bold",
+                    pad=10,
                 )
 
             # Add encoder label on the left
@@ -1168,13 +906,15 @@ def plot_bootstrap_detection_rate_barchart(
                     rotation=90,
                     ha="center",
                     va="center",
-                    fontsize=12,
+                    fontsize=15,
                     fontweight="bold",
                 )
 
-    # Add main title
     fig.suptitle(
-        f"{dataset} - Bootstrap Detection Rates", fontsize=16, fontweight="bold", y=0.98
+        f"{dataset.replace('Mammo', 'EMBED')} - Bootstrap Detection Rates",
+        fontsize=24,
+        fontweight="bold",
+        y=0.98,
     )
 
     # Add shared legend
@@ -1189,6 +929,7 @@ def plot_bootstrap_detection_rate_barchart(
             frameon=True,
             fancybox=True,
             shadow=True,
+            fontsize=14,
         )
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -1213,6 +954,8 @@ def plot_bootstrap_detection_rate_heatmap(
         dataset: Name of the dataset to plot results for
         all_results_df: DataFrame containing bootstrap results with columns:
                    ['dataset', 'encoder', 'shift', 'layer', 'test_size', 'detection_rate', ...]
+
+    Saves: f"bootstrap_heatmap_{dataset}_{encoder}_{test_size}samples.png"
     """
 
     # Check if required columns are present
@@ -1297,7 +1040,7 @@ def plot_bootstrap_detection_rate_heatmap(
             clean_shift_labels = [str(shift) for shift in heatmap_data.index]
             ax.set_yticklabels(clean_shift_labels, rotation=0)
 
-            title = f"Bootstrap Detection Rates: {dataset}\n{encoder.replace('_', ' ').title()} | {test_size} samples"
+            title = f"Bootstrap Detection Rates: {dataset.replace('Mammo', 'EMBED')}\n{encoder.replace('_', ' ').title()} | {test_size} samples"
             ax.set_title(title, fontsize=14, fontweight="bold", pad=20)
 
             output_dir.mkdir(parents=True, exist_ok=True)
@@ -1321,6 +1064,8 @@ def plot_bootstrap_detection_rate_heatmap_combined(
         output_dir: Directory to save the heatmap plots
         dataset: Name of the dataset to plot results for
         all_results_df: DataFrame containing bootstrap results
+
+    Saves: f"bootstrap_heatmap_combined_{dataset}.png"
     """
 
     # Filter for the specific dataset
@@ -1420,7 +1165,7 @@ def plot_bootstrap_detection_rate_heatmap_combined(
             ax.set_title(title, fontsize=10, fontweight="bold")
 
     fig.suptitle(
-        f"Bootstrap Detection Rate Heatmaps: {dataset}",
+        f"Bootstrap Detection Rate Heatmaps: {dataset.replace('Mammo', 'EMBED')}",
         fontsize=16,
         fontweight="bold",
         y=0.98,
@@ -1434,66 +1179,391 @@ def plot_bootstrap_detection_rate_heatmap_combined(
     print(f"[Saved] {filename}")
 
 
-def plot_kl_scatter(
-    output_dir: Path, dataset: str, encoder_to_evaluate: str, kl_divs: dict[str, float]
-) -> None:
+def plot_kl_panels_multi_layer(input_dir: Path, output_dir: Path) -> None:
     """
-    Plot a scatter graph of KL divergences across shifts,
-    connecting points for each shift group (e.g., x_* and y_*).
+    Create panel plots showing KL divergence across all layers for each dataset.
+    Each dataset gets a 3x2 grid with 5 layer plots and separability heatmap in the 6th position.
+
+    f"kl_divergence_layers_{dataset}_improved.png"
     """
 
-    if not kl_divs:
-        raise ValueError("kl_divs is empty; nothing to plot.")
+    # Set style for better appearance
+    plt.style.use("seaborn-v0_8-whitegrid")
+    plt.rcParams.update(
+        {
+            "font.size": 10,
+            "axes.labelsize": 11,
+            "axes.titlesize": 12,
+            "xtick.labelsize": 9,
+            "ytick.labelsize": 9,
+            "legend.fontsize": 11,
+            "figure.titlesize": 16,
+        }
+    )
 
-    # Preserve insertion order
-    items = list(kl_divs.items())
-    labels = [k for k, _ in items]
-    values = [
-        (
-            float(v)
-            if v is not None and not (isinstance(v, float) and math.isnan(v))
-            else float("nan")
+    # Data loading
+    csv_files = list(input_dir.glob("kl_divergence_new-*-*-*.csv"))
+    if not csv_files:
+        raise ValueError(
+            f"No CSV files found in {input_dir} with pattern 'kl_divergence_new-*-*-*.csv'"
         )
-        for _, v in items
-    ]
 
-    # Figure
-    fig, ax = plt.subplots(figsize=(8, 4.5))
-    x_positions = list(range(len(labels)))
+    data_records = []
+    for csv_file in csv_files:
+        name_parts = csv_file.stem.split("-")
+        if len(name_parts) != 4:
+            continue
 
-    # Scatter all points
-    ax.scatter(x_positions, values, s=60, color="tab:blue", edgecolor="black", zorder=3)
+        dataset = name_parts[1]
+        encoder = name_parts[2]
+        layer = name_parts[3]
 
-    # Group by prefix before underscore
-    groups = {}
-    for idx, label in enumerate(labels):
-        # Split shift label into alphabet and numeric parts
-        match = re.match(r"([a-zA-Z]+)_(\d+)", label)
+        try:
+            df_temp = pd.read_csv(csv_file)
+            for _, row in df_temp.iterrows():
+                data_records.append(
+                    {
+                        "dataset": dataset,
+                        "encoder": encoder,
+                        "layer": layer,
+                        "shift_name": row["shift_name"],
+                        "kl_divergence": (
+                            float(row["kl_divergence"])
+                            if pd.notna(row["kl_divergence"])
+                            else float("nan")
+                        ),
+                    }
+                )
+        except Exception as e:
+            print(f"Warning: Error reading {csv_file.name}: {e}")
+            continue
+
+    if not data_records:
+        raise ValueError("No valid data found in CSV files")
+
+    df = pd.DataFrame(data_records)
+    datasets = sorted(df["dataset"].unique())
+    encoders = sorted(df["encoder"].unique())
+    layers = ["after_maxpool", "layer_1", "layer_2", "layer_3", "final_layer"]
+
+    # Improved colorblind-friendly color palette
+    colors = ["#E31A1C", "#1F78B4", "#33A02C", "#FF7F00", "#6A3D9A"]
+    encoder_colors = dict(zip(encoders, colors[: len(encoders)]))
+
+    layer_display_names = {
+        "after_maxpool": "After MaxPool",
+        "layer_1": "Layer 1",
+        "layer_2": "Layer 2",
+        "layer_3": "Layer 3",
+        "final_layer": "Final Layer",
+    }
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    def group_aware_sort_key(shift_name):
+        """Sort by prefix first, then by number within each prefix"""
+        match = re.match(r"([a-zA-Z]+)_?(\d*)", str(shift_name))
         if match:
-            prefix, num = match.groups()
-            groups.setdefault(prefix, []).append((idx, values[idx], int(num)))
+            prefix = match.group(1)
+            num_str = match.group(2)
+            num = int(num_str) if num_str else 0
+            return (prefix, num)
         else:
-            # fallback if no match
-            groups.setdefault(label, []).append((idx, values[idx], None))
+            return (str(shift_name), 0)
 
-    # Connect points within each group
-    for prefix, points in groups.items():
-        # Sort by numeric part (if exists)
-        points.sort(key=lambda x: x[2] if x[2] is not None else x[0])
-        idxs, vals, _ = zip(*points)
-        ax.plot(idxs, vals, linewidth=1.5, label=prefix, zorder=2)
+    def create_readable_labels(shift_names):
+        """Create more readable x-axis labels"""
+        readable_labels = []
+        for shift in shift_names:
+            label = shift.replace("_", " ").title()
+            readable_labels.append(label)
+        return readable_labels
 
-    ax.set_xticks(x_positions)
-    ax.set_xticklabels(labels, rotation=30, ha="right")
-    ax.set_ylabel("KL Divergence")
-    ax.set_title(f"KL Divergence by Shift — {dataset} | {encoder_to_evaluate}")
-    ax.grid(True, linestyle="--", alpha=0.4)
-    ax.legend()
+    # Create panel plot for each dataset
+    for dataset in datasets:
+        # Use 2x3 layout instead to give more space for each subplot
+        fig, axes = plt.subplots(2, 3, figsize=(20, 12))
 
-    fig.tight_layout()
+        dataset_data = df[df["dataset"] == dataset]
 
-    file_name = f"{dataset}-{encoder_to_evaluate}-kl_scatter_grouped.png"
-    filepath = output_dir / file_name
-    fig.savefig(filepath, dpi=400, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
-    print(f"[Saved] {file_name}\n")
+        # Get all shifts for this dataset
+        all_shifts = sorted(
+            dataset_data["shift_name"].unique(), key=group_aware_sort_key
+        )
+        readable_labels = create_readable_labels(all_shifts)
+        x_positions = list(range(len(all_shifts)))
+
+        # Plot each layer
+        for layer_idx, layer in enumerate(layers):
+            row = layer_idx // 3
+            col = layer_idx % 3
+            ax = axes[row, col]
+
+            layer_data = dataset_data[dataset_data["layer"] == layer]
+
+            # Plot each encoder for this layer
+            for encoder in encoders:
+                encoder_data = layer_data[layer_data["encoder"] == encoder]
+                if encoder_data.empty:
+                    continue
+
+                values = []
+                errors_lower = []
+                errors_upper = []
+                actual_x_positions = []
+
+                for shift_idx, shift in enumerate(all_shifts):
+                    shift_data = encoder_data[encoder_data["shift_name"] == shift]
+
+                    if not shift_data.empty:
+                        if "kl_divergence" in shift_data.columns:
+                            values.append(shift_data["kl_divergence"].iloc[0])
+                            if "ci_lower" in shift_data.columns:
+                                errors_lower.append(
+                                    shift_data["kl_divergence"].iloc[0]
+                                    - shift_data["ci_lower"].iloc[0]
+                                )
+                                errors_upper.append(
+                                    shift_data["ci_upper"].iloc[0]
+                                    - shift_data["kl_divergence"].iloc[0]
+                                )
+
+                        actual_x_positions.append(shift_idx)
+
+                if not values:
+                    continue
+
+                if errors_lower and errors_upper:
+                    ax.errorbar(
+                        actual_x_positions,
+                        values,
+                        yerr=[errors_lower, errors_upper],
+                        fmt="none",
+                        ecolor=encoder_colors[encoder],
+                        alpha=0.3,
+                        capsize=3,
+                    )
+
+                # Enhanced scatter points
+                ax.scatter(
+                    actual_x_positions,
+                    values,
+                    s=100,
+                    color=encoder_colors[encoder],
+                    label=encoder,
+                    edgecolor="white",
+                    linewidth=2,
+                    zorder=3,
+                    alpha=0.9,
+                )
+
+                # Group and connect points
+                groups = {}
+                for pos, val, shift in zip(
+                    actual_x_positions,
+                    values,
+                    [all_shifts[i] for i in actual_x_positions],
+                ):
+                    match = re.match(r"([a-zA-Z]+)_?(\d*)", shift)
+                    if match:
+                        prefix = match.groups()[0]
+                        num_str = match.groups()[1]
+                        num = int(num_str) if num_str else 0
+                        groups.setdefault(prefix, []).append((pos, val, num, shift))
+
+                for prefix, points in groups.items():
+                    if len(points) > 1:
+                        points.sort(key=lambda x: x[2])
+                        x_coords, y_coords = zip(*[(p[0], p[1]) for p in points])
+                        ax.plot(
+                            x_coords,
+                            y_coords,
+                            color=encoder_colors[encoder],
+                            linewidth=3,
+                            alpha=0.7,
+                            zorder=2,
+                        )
+
+            # Enhanced subplot styling
+            ax.set_xticks(x_positions)
+            # Rotate labels more and use smaller font
+            ax.set_xticklabels(readable_labels, rotation=60, ha="right", fontsize=8)
+            ax.set_ylabel("KL Divergence", fontweight="bold", labelpad=15, fontsize=16)
+            ax.set_title(
+                layer_display_names[layer],
+                fontsize=18,
+                fontweight="bold",
+                pad=20,
+                color="#2E2E2E",
+            )
+
+            # Enhanced grid
+            ax.grid(True, linestyle="--", alpha=0.3, linewidth=1)
+            ax.set_axisbelow(True)
+
+            # Individual scaling for each layer for better clarity
+            layer_values = layer_data["kl_divergence"].dropna()
+            if len(layer_values) > 0:
+                layer_y_min = max(0, layer_values.min() * 0.3)
+                layer_y_max = layer_values.max() * 1.05
+                ax.set_ylim(layer_y_min, layer_y_max)
+
+            # Scientific notation when appropriate (based on individual layer values)
+            if len(layer_values) > 0 and (
+                layer_values.max() < 0.01 or layer_values.max() > 10000
+            ):
+                ax.ticklabel_format(style="scientific", axis="y", scilimits=(0, 0))
+
+            # Enhanced appearance
+            ax.set_facecolor("#fdfdfd")
+            for spine in ax.spines.values():
+                spine.set_linewidth(1.2)
+                spine.set_color("#dddddd")
+
+        # Create separability heatmap in the 6th position (bottom right)
+        ax_heatmap = axes[1, 2]
+
+        # Calculate separability scores for all encoder-layer combinations
+        separability_matrix = np.zeros((len(layers), len(encoders)))
+        for layer_idx, layer in enumerate(layers):
+            for encoder_idx, encoder in enumerate(encoders):
+                score = calculate_separability_score(dataset_data, encoder, layer)
+                separability_matrix[layer_idx, encoder_idx] = score
+
+        # Create heatmap
+        im = ax_heatmap.imshow(separability_matrix, cmap="RdYlBu_r", aspect="auto")
+
+        # Set ticks and labels
+        ax_heatmap.set_xticks(range(len(encoders)))
+        ax_heatmap.set_yticks(range(len(layers)))
+        ax_heatmap.set_xticklabels(
+            [
+                enc.replace("_", " ").replace("simclr", "SimCLR").title()
+                for enc in encoders
+            ],
+            rotation=45,
+            ha="right",
+            fontsize=9,
+        )
+        ax_heatmap.set_yticklabels(
+            [layer_display_names[layer] for layer in layers], fontsize=9
+        )
+
+        # Add colorbar
+        cbar = plt.colorbar(im, ax=ax_heatmap, shrink=0.8)
+        cbar.set_label(
+            "Separability Score\n(Fisher Ratio)",
+            rotation=270,
+            labelpad=30,
+            fontsize=14,
+            fontweight="bold",
+        )
+
+        # Add text annotations with separability scores
+        for layer_idx in range(len(layers)):
+            for encoder_idx in range(len(encoders)):
+                score = separability_matrix[layer_idx, encoder_idx]
+                if not np.isnan(score):
+                    if score == float("inf"):
+                        text = "∞"
+                    else:
+                        text = f"{score:.2f}"
+                    color = (
+                        "white" if score > np.nanmean(separability_matrix) else "black"
+                    )
+                    ax_heatmap.text(
+                        encoder_idx,
+                        layer_idx,
+                        text,
+                        ha="center",
+                        va="center",
+                        color=color,
+                        fontweight="bold",
+                        fontsize=8,
+                    )
+
+        ax_heatmap.set_title(
+            "Shift Type Separability",
+            fontsize=16,
+            fontweight="bold",
+            pad=20,
+            color="#2E2E2E",
+        )
+
+        # Enhanced appearance for heatmap
+        ax_heatmap.set_facecolor("#fdfdfd")
+        for spine in ax_heatmap.spines.values():
+            spine.set_linewidth(1.2)
+            spine.set_color("#dddddd")
+
+        # Create horizontal legend at the bottom
+        legend_handles = []
+        for encoder in encoders:
+            display_name = encoder.replace("_", " ").replace("simclr", "SimCLR").title()
+            handle = mlines.Line2D(
+                [0],
+                [0],
+                marker="o",
+                color="w",
+                markerfacecolor=encoder_colors[encoder],
+                markersize=10,
+                markeredgecolor="white",
+                markeredgewidth=1.5,
+                label=display_name,
+                linestyle="-",
+                linewidth=3,
+                alpha=0.9,
+            )
+            legend_handles.append(handle)
+
+        # Position legend at bottom of figure
+        fig.legend(
+            handles=legend_handles,
+            title="Encoder Models",
+            loc="lower center",
+            ncol=len(encoders),
+            bbox_to_anchor=(0.5, 0.02),
+            fontsize=12,
+            title_fontsize=14,
+            frameon=True,
+            fancybox=True,
+            shadow=True,
+            framealpha=0.95,
+            edgecolor="#cccccc",
+        )
+
+        fig.suptitle(
+            f"KL Divergence Across Encoder Layers: {dataset.replace('Mammo', 'EMBED')}",
+            fontsize=20,
+            fontweight="bold",
+            y=0.95,
+            color="#2E2E2E",
+        )
+
+        fig.text(
+            0.5,
+            0.91,
+            "Dataset shift sensitivity by encoder and layer depth",
+            ha="center",
+            fontsize=13,
+            style="italic",
+            color="#666666",
+        )
+
+        # Improved layout with space for bottom legend
+        plt.tight_layout(rect=(0, 0.08, 1, 0.88))
+        plt.subplots_adjust(hspace=0.4, wspace=0.3)
+
+        # Save with high quality
+        filepath = output_dir / f"kl_divergence_layers_{dataset}_improved.png"
+        fig.savefig(
+            filepath,
+            dpi=400,
+            bbox_inches="tight",
+            facecolor="white",
+            edgecolor="none",
+            pad_inches=0.3,
+        )
+        plt.close(fig)
+
+        print(f"[Saved] kl_divergence_layers_{dataset}_improved.png")
