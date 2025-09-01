@@ -19,6 +19,7 @@ class PlotConfig:
     """
     Plotting parameters used in 'plotting_utils.py'.
     """
+
     ALPHA = 0.8
     MARKER_SIZE = 40
     COLOR_PALETTE = "tab10"
@@ -38,7 +39,7 @@ class Config:
             - "final": only 'final layer' embeddings
             - "early": 'layer 1' and 'final layer' embeddings
             - "all": all layer embeddings
-    
+
         ENCODERS (dict[str, str]): Mapping from encoder name to saved filename.
 
         DATASET_CONFIG (dict[str, dict]): Dataset-specific metadata, including:
@@ -451,7 +452,6 @@ class Config:
         np.random.seed(seed)
         torch.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
-
 
     @staticmethod
     def validate() -> None:
