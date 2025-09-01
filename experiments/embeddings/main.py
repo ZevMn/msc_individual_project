@@ -1,16 +1,6 @@
 """
-experiments/embeddings/main.py
-
-Entry point script to generate visualisations of feature embeddings from 
-multiple layers of a pre-trained encoder across several medical imaging datasets.
-
-The pipeline:
-    1. Loads (or computes and caches) embeddings for validation/test splits.
-    2. Simulates predefined covariate/prevalence shifts on the test split.
-    3. Projects embeddings with PCA and t-SNE.
-    4. Produces layer-wise scatter/joint plots coloured by class and other
-       dataset-specific attributes.
-    5. Saves all figures under `experiments/outputs/<dataset>/Plots/<encoder>/`.
+Entry point script to run experiments which analyse feature embeddings representations,
+extracted from multiple layers of pre-trained encoders across several medical imaging datasets.
 
 Command-line arguments (all optional - fall back to in-file defaults):
     --encoder_to_evaluate   Encoder identifier: keys of 'Config.ENCODERS'.
@@ -23,6 +13,33 @@ Note: If you change 'feat_mode' after embeddings have already been saved, delete
 Example usage:
 --------------
 # Use defaults declared below
+    python experiments/embeddings/main.py
+
+# Override settings from the CLI
+    python experiments/embeddings/main.py \
+        --encoder_to_evaluate imagenet \
+        --feat_mode all \
+        --dataset Mammo
+"""
+"""
+experiments/embeddings/main.py
+
+Entry point script to run experiments which analyse feature embedding representations
+extracted from multiple layers of pre-trained encoders, and across several medical imaging 
+datasets. Experiments can be launched via CLI with configurable arguments.
+
+Command-line arguments (optional, with defaults below):
+    --encoder_to_evaluate   Encoder identifier (keys of Config.ENCODERS).
+    --feat_mode             Feature mode (keys of Config.FEAT_MODES_MAP).
+    --dataset               Dataset name (keys of Config.DATASET_CONFIG).
+
+Note:
+    If you change 'feat_mode' after embeddings are cached, delete the
+    corresponding '*.pkl' files before re-running to avoid mismatch.
+
+Example usage:
+--------------
+# Use defaults declared in this file
     python experiments/embeddings/main.py
 
 # Override settings from the CLI
@@ -45,7 +62,7 @@ from experiments.embeddings.experiments import (
 # --------- Defaults ----------
 ENCODER_TO_EVALUATE = "imagenet"  # Options: "imagenet", "simclr_imagenet", "random", or "simclr_modality_specific"
 FEAT_MODE = "all"  # Options: "final", "early", or "all"
-DATASET = "RSNA"  # Options: "Mammo", "Retina", "RSNA", or "PadChest"
+DATASET = "Mammo"  # Options: "Mammo", "Retina", "RSNA", or "PadChest"
 
 # --------------
 # Main execution
@@ -67,22 +84,24 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    # Uncomment as needed to run experiments:
+
     # print("\nRunning visualisation experiment:\n")
     # run_visualisation_experiment(
     #     args.encoder_to_evaluate, args.feat_mode, args.dataset, force_calculation=False
     # )
 
-    print("\nRunning stats experiment:\n")
-    run_detection_rate_experiment(
-        args.encoder_to_evaluate, args.feat_mode, args.dataset, force_calculations=False
-    )
+    # print("Running shift quantification experiment:\n")
+    # run_shift_quantification_experiment(
+    #     args.encoder_to_evaluate, args.feat_mode, args.dataset, force_calculations=False
+    # )
+
+    # print("\nRunning rudimentary detection rate experiment:\n")
+    # run_detection_rate_experiment(
+    #     args.encoder_to_evaluate, args.feat_mode, args.dataset, force_calculations=False
+    # )
 
     print("Running bootstrap detection rates experiment:\n")
     run_bootstrap_experiment(
         args.encoder_to_evaluate, args.feat_mode, args.dataset, force_calculations=False
     )
-
-    # print("Running shift quantification experiment:\n")
-    # run_shift_quantification_experiment(
-    #     args.encoder_to_evaluate, args.feat_mode, args.dataset, force_calculations=False
-    # )
