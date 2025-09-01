@@ -1,5 +1,14 @@
 """
 experiments/embeddings/data_processing_utils.py
+
+Utility functions for processing embeddings in validation/test splits, including:
+- Loading CSVs and preparing index tracking.
+- Generating and loading embeddings.
+- Preprocessing data for specific datasets.
+- Validating encoder outputs.
+- Preparing plot labels.
+- Simulating covariate shifts.
+- Computing and caching PCA/t-SNE projections.
 """
 
 import pickle
@@ -19,19 +28,22 @@ from data_handling.retina import RetinaDataset
 from data_handling.xray import PadChestDataset, RNSAPneumoniaDetectionDataset
 
 
-# --------------------------------------------------------
-# Generate val and test csvs into dfs and add index column
-# --------------------------------------------------------
+# ------------------------
+# CSV loading and indexing
+# ------------------------
 def load_csvs_and_add_idx_column(dataset: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Load validation and test CSVs for a dataset and to each one append an
-    'idx_in_original' column used to track rows across simulated shifts.
+    Load validation and test CSVs for a dataset and append an
+    'idx_in_original' column to each. This ensures rows can be
+    tracked consistently across simulated shifts.
 
     Args:
-        dataset: Key in Config.DATASET_CONFIG.
+        dataset (str): Key in Config.DATASET_CONFIG.
 
     Returns:
-        (val_df, test_df): DataFrames for validation and test splits.
+        tuple[pd.DataFrame, pd.DataFrame]:
+            Validation and test DataFrames with an added
+            'idx_in_original' column.
     """
 
     val_csv, test_csv = Config.DATASET_CONFIG[dataset]["csv_files"]
@@ -47,9 +59,9 @@ def load_csvs_and_add_idx_column(dataset: str) -> tuple[pd.DataFrame, pd.DataFra
     return val_df, test_df
 
 
-# -----------------------------------------
-# If embeddings do not exist, generate them
-# -----------------------------------------
+# ------------------------------
+# Embedding generation / loading
+# ------------------------------
 def generate_and_load_embeddings(
     encoder_to_evaluate: str,
     feat_mode: str,
@@ -59,11 +71,19 @@ def generate_and_load_embeddings(
 ) -> dict[str, dict[str, torch.Tensor]]:
     """
     Ensure embeddings exist for (dataset, encoder_to_evaluate, feat_mode).
-    If the cached pickle is missing, preprocess data and call 'get_or_save_outputs'.
-    Returns the loaded encoder outputs mapping for "val" and "test".
+    If not cached, generate them using 'get_or_save_outputs'.
+
+    Args:
+        encoder_to_evaluate (str): Encoder key from Config.ENCODERS.
+        feat_mode (str): Feature mode key from Config.FEATURE_MODE_MAP.
+        dataset (str): Dataset key from Config.DATASET_CONFIG.
+        val_df (pd.DataFrame): Validation dataframe.
+        test_df (pd.DataFrame): Test dataframe.
 
     Returns:
-        dict: {"val": {layer_x: Tensor, ..., "y": Tensor}, "test": {...}}
+        dict[str, dict[str, torch.Tensor]]:
+            {"val": {layer: torch.Tensor, ..., "y": torch.Tensor},
+             "test": {layer: torch.Tensor, ..., "y": torch.Tensor}}
     """
 
     if encoder_to_evaluate == "simclr_modality_specific":
@@ -123,10 +143,21 @@ def generate_and_load_embeddings(
     return load_embeddings_pkl(encoder_pickle_path)
 
 
-# -----------------------------------------
-# Wrapper to apply correct dataset function
-# -----------------------------------------
-def preprocess_data(dataset, val_df, test_df):
+# ---------------------
+# Dataset preprocessing
+# ---------------------
+def preprocess_data(dataset: str, val_df: pd.DataFrame, test_df: pd.DataFrame) -> tuple:
+    """
+    Wrap CSV rows into the correct dataset-specific PyTorch Dataset.
+
+    Args:
+        dataset (str): Dataset key from Config.DATASET_CONFIG.
+        val_df (pd.DataFrame): Validation dataframe.
+        test_df (pd.DataFrame): Test dataframe.
+
+    Returns:
+        tuple: (val_dataset, test_dataset)
+    """
     if dataset == "Mammo":
         DS = EmbedDataset
     elif dataset == "Retina":
@@ -145,21 +176,25 @@ def preprocess_data(dataset, val_df, test_df):
     )
 
 
-# -----------------------------------
-# Load embeddings with error handling
-# -----------------------------------
+# -------------------------------------------
+# Load pickled embeddings with error handling
+# -------------------------------------------
 def load_embeddings_pkl(file_path: Path) -> dict[str, dict[str, torch.Tensor]]:
     """
     Load a pickled file containing a mapping of val and test splits
     to the corresponding embeddings, grouped by layer of the encoder.
 
+    Args:
+        file_path (Path): Path to pickle file.
+
+    Returns:
+        dict[str, dict[str, torch.Tensor]]: Mapping of splits ("val", "test")
+            to embeddings by layer and labels.
+
     Raises:
-        FileNotFoundError
-            If the file does not exist.
-        ValueError
-            If the file isn't a valid pickle.
-        IOError
-            For other I/O related errors.
+        FileNotFoundError: If file does not exist.
+        ValueError: If file is not a valid pickle.
+        IOError: For other I/O issues.
     """
     try:
         with open(file_path, "rb") as f:
@@ -190,18 +225,17 @@ def validate_and_process_embeddings(
         "all": Features from all layers are present.
 
     Args:
-        encoder_output (dict): Mapping of "val" and "test" splits to the corresponding embeddings.
+        encoder_output (dict): Mapping of "val" and "test" splits to the corresponding per-layer embeddings.
 
     Returns:
         tuple:
-            layers (list[str]): Names of layers available for visualisation.
-            val_embeddings (dict[str, torch.Tensor]): Mapping from layer names to feature tensors.
-            test_embeddings (dict[str, torch.Tensor]): Mapping from layer names to feature tensors.
+            layers (list[str]): Available layers for visualisation.
+            val_embeddings (dict[str, torch.Tensor]): Mapping of layer names to feature tensors.
+            test_embeddings (dict[str, torch.Tensor]): Mapping of layer names to feature tensors.
 
     Raises:
         ValueError: If the split is missing or the structure is not recognised.
     """
-
     expected_splits = {"val", "test"}
     if set(encoder_output) != expected_splits:
         raise ValueError(
@@ -231,9 +265,9 @@ def validate_and_process_embeddings(
     return layers, val_embeddings, test_embeddings
 
 
-# -------------------------------------------------------------
-# Generate dicts of {label names: feature labels to be plotted}
-# -------------------------------------------------------------
+# -----------------------------
+# Label extraction for plotting
+# -----------------------------
 def extract_plot_labels(
     val_df: pd.DataFrame,
     test_df: pd.DataFrame,
@@ -246,19 +280,18 @@ def extract_plot_labels(
     Config.DATASET_CONFIG[dataset]["plot_columns"].
 
     Args:
-        val_df (pd.DataFrame): Dataframe for the "val" dataset.
-        test_df (pd.DataFrame): Dataframe for the "test" dataset.
+        val_df (pd.DataFrame): Validation dataframe.
+        test_df (pd.DataFrame): Test dataframe.
         encoder_output (dict[str, dict[str, torch.Tensor]]): Mapping of "val" and "test" splits
-        to the corresponding embeddings by layer.
-        dataset (str): The name of the dataset (e.g., "Mammo", "Retina", etc.), used to look up
-                    the column mapping and plotting order from the configuration.
+            to the corresponding per-layer embeddings.
+        dataset (str): Dataset name used as key to fetch column mapping and plotting order config.
 
     Returns:
         tuple:
-            val_plot_labels (dict[str, np.ndarray]): A dictionary mapping label names to NumPy arrays
-                                                    of labels extracted from the "val" dataset.
-            test_plot_labels (dict[str, np.ndarray]): A dictionary mapping label names to NumPy arrays
-                                                    of labels extracted from the "test" dataset.
+            val_plot_labels (dict[str, np.ndarray]): A mapping of label names to NumPy arrays
+                of labels extracted from the "val" dataset.
+            test_plot_labels (dict[str, np.ndarray]): A mapping of label names to NumPy arrays
+                of labels extracted from the "test" dataset.
     """
     val_plot_labels = {}
     test_plot_labels = {}
@@ -284,11 +317,19 @@ def extract_plot_labels(
     return val_plot_labels, test_plot_labels
 
 
+# ----------------
+# Shift simulation
+# ----------------
 def simulate_shifts(dataset: str, test_df: pd.DataFrame) -> dict[str, np.ndarray]:
     """
-    Apply all registered shift functions for 'dataset' to the test DataFrame and
-    return a mapping from shift name to the original row indices ('idx_in_original')
-    that comprise each shifted subset.
+    Apply all registered shift functions for a dataset.
+
+    Args:
+        dataset: Dataset name.
+        test_df: Test dataframe (containing 'idx_in_original' column).
+
+    Returns:
+        dict[str, np.ndarray]: Mapping of shift name to indices of shifted subset.
     """
 
     shift_to_indices_dict = {}
@@ -307,6 +348,39 @@ def simulate_shifts(dataset: str, test_df: pd.DataFrame) -> dict[str, np.ndarray
     return shift_to_indices_dict
 
 
+def simulate_wide_range_of_shifts(
+    dataset: str, test_df: pd.DataFrame
+) -> dict[str, np.ndarray]:
+    """
+    Apply extended shift functions for quantification experiments.
+
+    Args:
+        dataset: Dataset name.
+        test_df: Test dataframe (containing 'idx_in_original' column).
+
+    Returns:
+        dict[str, np.ndarray]: Mapping of shift name to indices of shifted subset.
+    """
+
+    shift_to_indices_dict = {}
+
+    print(f"Simulating wide range of shifts on test data...")
+    for shift_name, shift_fn in Config.EXTENDED_SHIFT_REGISTRY[dataset].items():
+        df = shift_fn(test_df.copy(), random_state=Config.SEED)
+
+        if "idx_in_original" not in df.columns:
+            raise ValueError(
+                f"Shift function '{shift_name}' must preserve 'idx_in_original' column."
+            )
+
+        shift_to_indices_dict[shift_name] = df["idx_in_original"].to_numpy()
+
+    return shift_to_indices_dict
+
+
+# ------------------------------------------------------------
+# Embedding concatenation followed by dimensionality reduction
+# ------------------------------------------------------------
 def concat_embeddings(
     val_embeddings_layer: torch.Tensor,
     test_embeddings_layer: torch.Tensor,
@@ -317,16 +391,20 @@ def concat_embeddings(
 
     Args:
         val_embeddings_layer: Validation (source) embeddings for a single layer.
-        test_embeddings_layer: Test (target) embeddings for the same layer.
-        shift_to_indices_dict: Mapping from shift name to integer indices
-            selecting rows from 'test_embeddings_layer' to form each shifted subset.
+        test_embeddings_layer: Test (target) embeddings for a single layer.
+        shift_to_indices_dict: Mapping of shift name to indices of shifted test subset.
 
     Returns:
-        A tuple ('cat_embeddings', 'shift_labels') where:
-            'cat_embeddings' is a tensor formed by concatenating validation embeddings
+        tuple:
+            'cat_embeddings': is a tensor formed by concatenating validation embeddings
               with each shifted subset.
-            'shift_labels' is a corresponding list with the string label "no_shift" for
+            'shift_labels': is a corresponding list with the string label "no_shift" for
             validation rows and the shift name for each shifted subset row.
+    """
+    """
+        (cat_embeddings, shift_labels):
+            cat_embeddings: Tensor of concatenated embeddings.
+            shift_labels: List of "no_shift"/shift names.
     """
     cat_embeddings = [val_embeddings_layer]
     shift_labels = ["no_shift"] * len(val_embeddings_layer)
@@ -341,6 +419,7 @@ def concat_embeddings(
 
 def calculate_and_save_layer_pca_and_tsne(
     output_dir: Path,
+    encoder_to_evaluate: str,
     layers: list[str],
     val_embeddings: dict[str, torch.Tensor],
     test_embeddings: dict[str, torch.Tensor],
@@ -375,7 +454,7 @@ def calculate_and_save_layer_pca_and_tsne(
     # Produce a separate CSV for embeddings from each layer of the encoder
     for layer in layers:
 
-        csv_path = output_dir / f"{layer}_pca_tsne.csv"
+        csv_path = output_dir / f"{layer}_{encoder_to_evaluate}_pca_tsne.csv"
         use_cached = csv_path.exists() and not force_calculation
 
         try:
@@ -416,27 +495,3 @@ def calculate_and_save_layer_pca_and_tsne(
             raise IOError(f"Error processing layer {layer}: {e}")
 
     return layer_to_results_dict
-
-
-def simulate_wide_range_of_shifts(dataset: str, test_df: pd.DataFrame) -> dict[str, np.ndarray]:
-    """
-    Simulate a wide range of shifts for quantification experiment.
-    Apply the shift functions for 'dataset' to the test DataFrame and
-    return a mapping from shift name to the original row indices ('idx_in_original')
-    that comprise each shifted subset.
-    """
-
-    shift_to_indices_dict = {}
-
-    print(f"Simulating wide range of shifts on test data...")
-    for shift_name, shift_fn in Config.EXTENDED_SHIFT_REGISTRY[dataset].items():
-        df = shift_fn(test_df.copy(), random_state=Config.SEED)
-
-        if "idx_in_original" not in df.columns:
-            raise ValueError(
-                f"Shift function '{shift_name}' must preserve 'idx_in_original' column."
-            )
-
-        shift_to_indices_dict[shift_name] = df["idx_in_original"].to_numpy()
-
-    return shift_to_indices_dict
