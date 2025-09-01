@@ -378,9 +378,9 @@ def simulate_wide_range_of_shifts(
     return shift_to_indices_dict
 
 
-# ------------------------------------------------------------
-# Embedding concatenation followed by dimensionality reduction
-# ------------------------------------------------------------
+# --------------------------------------------------
+# Embedding concatenation & dimensionality reduction
+# --------------------------------------------------
 def concat_embeddings(
     val_embeddings_layer: torch.Tensor,
     test_embeddings_layer: torch.Tensor,
@@ -396,15 +396,9 @@ def concat_embeddings(
 
     Returns:
         tuple:
-            'cat_embeddings': is a tensor formed by concatenating validation embeddings
-              with each shifted subset.
-            'shift_labels': is a corresponding list with the string label "no_shift" for
-            validation rows and the shift name for each shifted subset row.
-    """
-    """
-        (cat_embeddings, shift_labels):
-            cat_embeddings: Tensor of concatenated embeddings.
-            shift_labels: List of "no_shift"/shift names.
+            'cat_embeddings' (torch.Tensor): A tensor of concatenated embeddings,
+            'shift_labels' (list[str]): A corresponding list with the string label "no_shift" for
+                validation rows and the shift name for each shifted subset row.
     """
     cat_embeddings = [val_embeddings_layer]
     shift_labels = ["no_shift"] * len(val_embeddings_layer)
@@ -430,8 +424,9 @@ def calculate_and_save_layer_pca_and_tsne(
     Calculate PCA/t-SNE projections for all layers' embeddings and saves them as a csv.
 
     Args:
-        output_dir: Directory to save the CSV files.
-        layers: Ordered list of layer names to process and plot.
+        output_dir: Directory to save the CSVs.
+        encoder_to_evaluate: Encoder identifier.
+        layers: Ordered list of layer names to process.
         val_embeddings: Mapping from layer name to a tensor of validation (source) embeddings.
         test_embeddings: Mapping from layer name to a tensor of test (target) embeddings.
         shift_to_indices_dict: Mapping from shift name to a NumPy array of
@@ -440,10 +435,10 @@ def calculate_and_save_layer_pca_and_tsne(
         force_calculation: If True, recalculate PCA/t-SNE even if cached files exist.
 
     Returns:
-        A dictionary mapping layer names to their PCA/t-SNE results as DataFrames.
+        dict[str, pd.DataFrame]: A mapping of layer names to PCA/t-SNE results.
 
     Raises:
-        ValueError: If cached CSV files are missing expected columns.
+        ValueError: If cached file missing expected columns.
         IOError: If file operations fail.
     """
     output_dir.mkdir(parents=True, exist_ok=True)

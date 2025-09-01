@@ -3,29 +3,32 @@ experiments/embeddings/statistical_utils.py
 
 Statistical utilities for detecting distribution shifts in embedding spaces.
 
-This module provides implementations of several statistical metrics to compare
-two distributions (reference vs shifted embeddings) across model layers.
-Metrics supported:
-    - MMD (Maximum Mean Discrepancy with RBF kernel)
-    - KL divergence
+This module provides implementations of statistical metrics and visualisation tools
+for comparing reference and shifted embeddings across model layers. It includes
+methods for detecting covariate shifts, calculating divergence metrics, and
+performing bootstrap analysis for robust statistical inference.
 
-Each function returns structured results using the ShiftTestResult dataclass.
-Helper functions are provided to compute metrics individually or all at once,
-and to save results in JSON and CSV format.
+Key Features:
+    - MMD (Maximum Mean Discrepancy) testing with permutation-based p-values
+    - KL divergence calculation with bootstrap confidence intervals
+    - PCA and t-SNE dimensionality reduction for visualisation
+    - Bootstrap-based detection rate analysis
+    - Fisher's discriminant ratio for shift separability
+    - Caching mechanism for expensive computations
 """
 
 from dataclasses import dataclass, asdict
 from pathlib import Path
 import json
-from typing import Tuple
+from typing import Tuple, Union
 
 import numpy as np
 import pandas as pd
 import torch
 
-from scipy.stats import entropy
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
+from scipy.stats import entropy
 
 from shift_identification_detection.mmd_test import run_mmd_permutation_test
 from shift_identification_detection.shift_identification import (
@@ -35,25 +38,74 @@ from shift_identification_detection.shift_identification import (
 from experiments.embeddings.config import Config
 
 
+# ------------
+# Data Classes
+# ------------
+@dataclass
+class ShiftTestResult:
+    """
+    Container for storing statistical test results for simulated shifts.
+
+    Specific to the ResNet-50 architecture with its standard layers.
+    Each layer has associated MMD test p-values and significance indicators.
+
+    Attributes:
+        shift: Name/identifier of the shift being tested.
+        mp_mmd_pvalue: p-value from MMD test after max pooling layer.
+        mp_mmd_is_significant: Whether MMD test is significant (p < 0.05) for max pool.
+        layer_1_mmd_pvalue: p-value from MMD test for layer 1.
+        layer_1_mmd_is_significant: Whether MMD test is significant for layer 1.
+        layer_2_mmd_pvalue: p-value from MMD test for layer 2.
+        layer_2_mmd_is_significant: Whether MMD test is significant for layer 2.
+        layer_3_mmd_pvalue: p-value from MMD test for layer 3.
+        layer_3_mmd_is_significant: Whether MMD test is significant for layer 3.
+        final_layer_mmd_pvalue: p-value from MMD test for final layer.
+        final_layer_mmd_is_significant: Whether MMD test is significant for final layer.
+    """
+
+    shift: str = ""
+
+    mp_mmd_pvalue: float = 1.00
+    mp_mmd_is_significant: bool = False
+
+    layer_1_mmd_pvalue: float = 1.00
+    layer_1_mmd_is_significant: bool = False
+
+    layer_2_mmd_pvalue: float = 1.00
+    layer_2_mmd_is_significant: bool = False
+
+    layer_3_mmd_pvalue: float = 1.00
+    layer_3_mmd_is_significant: bool = False
+
+    final_layer_mmd_pvalue: float = 1.00
+    final_layer_mmd_is_significant: bool = False
+
+
+# ------------------------
+# Dimensionality reduction
+# ------------------------
 def calculate_PCA_and_tSNE(
     embeddings: torch.Tensor,
     pca_components: int = 2,
     seed: int = Config.SEED,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Project embeddings with PCA and t-SNE.
+    Apply PCA followed by t-SNE for embedding visualisation.
 
     PCA is applied to reduce dimensionality (default 2D), followed by t-SNE
     on the PCA output to obtain a 2D embedding. Perplexity is set based on
     sample size, and is always set between 5 and 30.
 
     Args:
-        embeddings: Tensor of shape (n_samples, n_features).
-        pca_components: Number of components for PCA (capped to available dims).
+        embeddings: Input tensor of shape (n_samples, n_features).
+        pca_components: Target dimensions for PCA reduction. Will be capped
+            to available dimensions.
         seed: Random seed for reproducibility.
 
     Returns:
-        Tuple (embeddings_pca, embeddings_tsne), both np.ndarrays.
+        Tuple:
+            - pca_embeddings: np.ndarray of shape (n_samples, pca_components).
+            - tsne_embeddings: np.ndarray of shape (n_samples, 2).
     """
     if embeddings.is_cuda:
         embeddings = embeddings.cpu()
@@ -94,32 +146,9 @@ def calculate_PCA_and_tSNE(
     return embeddings_pca, embeddings_tsne
 
 
-@dataclass
-class ShiftTestResult:
-    """
-    Container for storing the result of a statistical test for a shift.
-
-    Specific to ResNet-50 architecture.
-    """
-
-    shift: str = ""
-
-    mp_mmd_pvalue: float = 1.00
-    mp_mmd_is_significant: bool = False
-
-    layer_1_mmd_pvalue: float = 1.00
-    layer_1_mmd_is_significant: bool = False
-
-    layer_2_mmd_pvalue: float = 1.00
-    layer_2_mmd_is_significant: bool = False
-
-    layer_3_mmd_pvalue: float = 1.00
-    layer_3_mmd_is_significant: bool = False
-
-    final_layer_mmd_pvalue: float = 1.00
-    final_layer_mmd_is_significant: bool = False
-
-
+# ------------------------------------
+# MMD-based detection rate calculation
+# ------------------------------------
 def calculate_detection_rates(
     output_dir: Path,
     dataset: str,
@@ -132,19 +161,27 @@ def calculate_detection_rates(
     force_calculations: bool = False,
 ) -> list[ShiftTestResult]:
     """
-    Calculate detection rates for a number of simulated covariate shifts,
-    with optional caching.
+    Calculate MMD-based detection rates for multiple simulated shifts.
 
     Args:
         output_dir: Directory to save results.
-        dataset: Name of the dataset.
-        encoder_to_evaluate: Name of the encoder being evaluated.
-        layers: List of layer names to evaluate.
-        n_val: Number of validation samples.
-        val_embeddings: Dictionary of validation embeddings by layer.
-        test_embeddings: Dictionary of test embeddings by layer.
+        dataset: Dataset name/identifier.
+        encoder_to_evaluate: Model encoder name.
+        layers: List of layer names to evaluate. Must match ShiftTestResult fields.
+        n_val: Number of validation samples to use in testing.
+        val_embeddings: Mapping of layer names to validation embedding tensors.
+        test_embeddings: Mapping of layer names to test embedding tensors..
         shift_to_indices_dict: Dictionary mapping shift names to indices.
         force_calculations: If True, skip cache and recalculate everything.
+
+    Returns:
+        List of ShiftTestResult objects, one per shift in shift_to_indices_dict.
+
+    Notes:
+        - Uses PCA preprocessing (32 components) before MMD testing
+        - Special handling for "Mammo" dataset with patient-aware permutations
+        - Results are incrementally saved during computation
+        - Cache validation checks for completeness and consistency
     """
 
     json_path = output_dir / f"{dataset}_{encoder_to_evaluate}_stats.json"
@@ -284,6 +321,12 @@ def calculate_bootstrap_detection_rates(
         n_val (int): Number of validation samples to use per bootstrap.
         shift_subset_sizes (list[int]): List of test subset sizes to evaluate.
         force_calculations (bool): If True, skip cache and recalculate everything.
+
+    Notes:
+        - Each combination (shift, layer, subset_size) has n_bootstrap iterations
+        - Uses PCA preprocessing (32 components) before MMD testing
+        - Special handling for "Mammo" dataset with patient-aware permutations
+        - Results include detection rates, mean p-values, and standard deviations
     """
 
     csv_path = (
@@ -469,19 +512,29 @@ def calculate_bootstrap_detection_rates(
         print(f"Error in final save: {e}")
 
 
-def calculate_kl_divergence_for_embeddings(
+# ----------------------
+# KL divergence analysis
+# ----------------------
+def calculate_kl_divergence(
     reference_embeddings: np.ndarray,
     target_embeddings: np.ndarray,
     num_bins: int = 50,
     epsilon: float = 1e-10,
 ) -> float:
     """
-    Correctly calculates KL divergence between two sets of embeddings.
+    Calculates KL divergence between two sets of embeddings.
 
-    1. Flattens embeddings into 1D arrays.
-    2. Determines a common range for binning.
-    3. Creates normalized, smoothed histograms (probability distributions).
-    4. Computes KL divergence between the two distributions.
+    Uses histogram-based estimation with smoothing to compute KL(reference||target).
+    Embeddings are flattened and treated as samples from continuous distributions.
+
+    Args:
+        reference_embeddings: Reference distribution embeddings (any shape).
+        target_embeddings: Target distribution embeddings (any shape).
+        num_bins: Number of histogram bins for density estimation.
+        epsilon: Smoothing constant to avoid log(0) issues.
+
+    Returns:
+        KL divergence value (non-negative float).
     """
     # Step 1: Flatten embeddings to treat them as pools of values
     reference_flat = reference_embeddings.flatten()
@@ -490,13 +543,18 @@ def calculate_kl_divergence_for_embeddings(
     # Step 2: Determine a common range for the histograms
     min_val = min(reference_flat.min(), target_flat.min())
     max_val = max(reference_flat.max(), target_flat.max())
+
+    # Handle edge case where min == max
+    if min_val == max_val:
+        return 0.0
+
     bins = np.linspace(min_val, max_val, num_bins)
 
     # Step 3: Generate histograms
     p_hist, _ = np.histogram(reference_flat, bins=bins)
     q_hist, _ = np.histogram(target_flat, bins=bins)
 
-    # Step 4: Smooth and normalize to create valid probability distributions
+    # Step 4: Smooth and normalise to create valid probability distributions
     p_smoothed = p_hist + epsilon
     q_smoothed = q_hist + epsilon
 
@@ -508,55 +566,278 @@ def calculate_kl_divergence_for_embeddings(
     return float(entropy(p_dist, q_dist))
 
 
-def calculate_kl_div_for_all_shifts(
+def calculate_kl_with_bootstrap(
+    val_embeddings: np.ndarray,
+    test_embeddings: np.ndarray,
+    n_bootstrap: int = 100,
+    confidence: float = 0.95,
+) -> dict[str, Union[float, list]]:
+    """
+    Calculate KL divergence with bootstrap confidence intervals.
+
+    Performs bootstrap resampling to estimate the sampling distribution
+    of KL divergence and compute confidence intervals.
+
+    Args:
+        val_embeddings: Validation set embeddings.
+        test_embeddings: Test set embeddings.
+        n_bootstrap: Number of bootstrap iterations.
+        confidence: Confidence level for intervals.
+
+    Returns:
+        Dictionary containing:
+            - mean_kl: Bootstrap mean of KL divergence
+            - std_kl: Bootstrap standard deviation
+            - ci_lower: Lower confidence interval bound
+            - ci_upper: Upper confidence interval bound
+            - raw_values: List of all bootstrap KL values
+    """
+    kl_values = []
+    n_test = len(test_embeddings)
+    n_val = len(val_embeddings)
+
+    for _ in range(n_bootstrap):
+        # Bootstrap both distributions
+        val_indices = np.random.choice(n_val, n_val, replace=True)
+        test_indices = np.random.choice(n_test, n_test, replace=True)
+
+        val_sample = val_embeddings[val_indices]
+        test_sample = test_embeddings[test_indices]
+
+        kl = calculate_kl_divergence(val_sample, test_sample)
+        kl_values.append(kl)
+
+    # Calculate confidence intervals
+    alpha = 1 - confidence
+    lower = float(np.percentile(kl_values, alpha / 2 * 100))
+    upper = float(np.percentile(kl_values, (1 - alpha / 2) * 100))
+
+    mean_kl = float(np.mean(kl_values))
+    std_kl = float(np.std(kl_values))
+
+    return {
+        "mean_kl": mean_kl,
+        "std_kl": std_kl,
+        "ci_lower": lower,
+        "ci_upper": upper,
+        "raw_values": kl_values,
+    }
+
+
+def calculate_kl_div_for_all_shifts_all_layers(
     output_dir: Path,
     dataset: str,
     encoder_to_evaluate: str,
     val_embeddings: dict[str, torch.Tensor],
     test_embeddings: dict[str, torch.Tensor],
     shift_to_indices_dict: dict[str, np.ndarray],
-    layer: str,
     force_calculations: bool = False,
-) -> dict[str, float]:
+    n_bootstrap: int = 100,
+) -> dict[str, dict[str, dict]]:
+    """
+    Comprehensive KL divergence analysis across all shifts and layers.
+    
+    Calculates KL divergence with bootstrap confidence intervals for each
+    combination of layer and shift. Includes baseline normalisation using
+    within-validation KL divergence.
+    
+    Args:
+        output_dir: Directory for saving results.
+        dataset: Dataset name for file naming.
+        encoder_to_evaluate: Encoder name for file naming.
+        val_embeddings: Validation embeddings per layer.
+        test_embeddings: Test embeddings per layer.
+        shift_to_indices_dict: Mapping of shift names to indices.
+        force_calculations: If True, bypass cache.
+        n_bootstrap: Number of bootstrap iterations for CI estimation.
+    
+    Returns:
+        Nested dictionary: {layer: {shift_name: kl_statistics}}
+    """
 
-    csv_path = output_dir / f"kl_divergence-{dataset}-{encoder_to_evaluate}.csv"
-    json_path = output_dir / f"kl_divergence-{dataset}-{encoder_to_evaluate}.json"
+    all_results: dict[str, dict[str, dict]] = {}  # {layer: {shift_name: kl_results}}
 
-    kl_divs: dict[str, float] = {}
+    layers = ["after_maxpool", "layer_1", "layer_2", "layer_3", "final_layer"]
+    for layer in layers:
+        print(f"Processing layer: {layer}")
 
-    if json_path.exists() and not force_calculations:
-        print(f"Loading cached results for {dataset}/{encoder_to_evaluate}")
-        try:
-            with open(json_path, "r") as jf:
-                cached_data = json.load(jf)
-
-            cached_shifts = set(cached_data.keys())
-            required_shifts = set(shift_to_indices_dict.keys())
-
-            if cached_shifts == required_shifts:
-                kl_divs = cached_data
-                return kl_divs
-            else:
-                print("Cache is incomplete or outdated. Recalculating...")
-        except (json.JSONDecodeError, KeyError, TypeError) as e:
-            print(f"Error reading cached results: {e}. Recalculating...")
-
-    early_val = val_embeddings[layer]
-    for shift_name, shift_indices in shift_to_indices_dict.items():
-        early_test = test_embeddings[layer][shift_indices]
-        kl_divs[shift_name] = calculate_kl_divergence_for_embeddings(
-            early_val.numpy(), early_test.numpy()
+        csv_path = (
+            output_dir
+            / f"kl_divergence_new-{dataset}-{encoder_to_evaluate}-{layer}.csv"
+        )
+        json_path = (
+            output_dir
+            / f"kl_divergence_new-{dataset}-{encoder_to_evaluate}-{layer}.json"
         )
 
-    print("Finished calculations.")
-    try:
-        with open(json_path, "w") as jf:
-            json.dump(kl_divs, jf, indent=2)
-        df = pd.DataFrame(kl_divs.items(), columns=["shift_name", "kl_divergence"])
-        df.to_csv(csv_path, index=False)
-        print(f"[Saved] CSV: {csv_path}")
-        print(f"[Saved] JSON: {json_path}")
-    except Exception as e:
-        print(f"Error in final save: {e}")
+        kl_results: dict[str, dict] = {}
 
-    return kl_divs
+        if json_path.exists() and not force_calculations:
+            print(f"Loading cached results for {dataset}/{encoder_to_evaluate}/{layer}")
+            try:
+                with open(json_path, "r") as jf:
+                    cached_data = json.load(jf)
+
+                cached_shifts = set(cached_data.keys())
+                required_shifts = set(shift_to_indices_dict.keys())
+
+                if cached_shifts == required_shifts:
+                    all_results[layer] = cached_data
+                    continue
+                else:
+                    print("Cache is incomplete or outdated. Recalculating...")
+            except Exception as e:
+                print(f"Error reading cached results: {e}. Recalculating...")
+
+        # Calculate baseline KL for normalisation (within validation set)
+        val_layer_embeddings = val_embeddings[layer].numpy()
+        n_val = len(val_layer_embeddings)
+        split_point = n_val // 2
+
+        baseline_kl = calculate_kl_divergence(
+            val_layer_embeddings[:split_point], val_layer_embeddings[split_point:]
+        )
+
+        # Process each shift
+        for shift_name, shift_indices in shift_to_indices_dict.items():
+            print(f"    Processing shift: {shift_name}")
+            test_layer_embeddings = test_embeddings[layer][shift_indices].numpy()
+
+            bootstrap_result = calculate_kl_with_bootstrap(
+                val_layer_embeddings, test_layer_embeddings, n_bootstrap=n_bootstrap
+            )
+
+            kl_results[shift_name] = {
+                "kl_divergence": bootstrap_result["mean_kl"],
+                "kl_std": bootstrap_result["std_kl"],
+                "ci_lower": bootstrap_result["ci_lower"],
+                "ci_upper": bootstrap_result["ci_upper"],
+                "baseline_kl": baseline_kl,
+                "normalised_ratio": bootstrap_result["mean_kl"] / (baseline_kl + 1e-10),
+                "normalised_diff": bootstrap_result["mean_kl"] - baseline_kl,
+            }
+
+        all_results[layer] = kl_results
+
+        # Save results for this layer
+        try:
+            with open(json_path, "w") as jf:
+                json.dump(kl_results, jf, indent=2)
+            df = pd.DataFrame(kl_results.items(), columns=["shift_name", "kl_results"])
+
+            csv_data = []
+            for shift_name, results in kl_results.items():
+                csv_data.append(
+                    {
+                        "shift_name": shift_name,
+                        "kl_divergence": results["kl_divergence"],
+                        "kl_std": results["kl_std"],
+                        "ci_lower": results["ci_lower"],
+                        "ci_upper": results["ci_upper"],
+                        "baseline_kl": results["baseline_kl"],
+                        "normalised_ratio": results["normalised_ratio"],
+                        "normalised_diff": results["normalised_diff"],
+                    }
+                )
+            df = pd.DataFrame(csv_data)
+            df.to_csv(csv_path, index=False)
+            print(f"[Saved] CSV: {csv_path}")
+            print(f"[Saved] JSON: {json_path}")
+        except Exception as e:
+            print(f"Error saving results for {layer}: {e}")
+
+    print("Finished calculations for all layers.")
+    return all_results
+
+
+# ---------------------------------------
+# Shift quantification analysis utilities
+# ---------------------------------------
+def extract_shift_type(shift_name: str) -> str:
+    """
+    Extract shift type from shift name (e.g., 'gender' from 'gender_1')
+    """
+    if pd.isna(shift_name):
+        return "unknown"
+    return str(shift_name).split("_")[0] if "_" in str(shift_name) else str(shift_name)
+
+
+def calculate_separability_score(
+    dataset_data: pd.DataFrame, encoder: str, layer: str
+) -> float:
+    """
+    Calculate Fisher's discriminant ratio for shift type separability.
+    
+    Measures how well different shift types can be distinguished based on
+    their KL divergence values. Higher scores indicate better separability.
+
+    Args:
+        dataset_data: DataFrame with columns: encoder, layer, shift_name, kl_divergence.
+        encoder: Encoder name (to filter data).
+        layer: Layer name (to filter data).
+    
+    Returns:
+        Fisher's discriminant ratio.
+        Returns np.nan if insufficient data or only one shift type.
+        Returns inf if perfect separation.
+
+    Notes:
+        - Requires at least 2 different shift types
+        - Uses Bessel's correction (ddof=1) for variance estimates
+    """
+    # Filter for specific encoder and layer
+    layer_encoder_data = dataset_data[
+        (dataset_data["encoder"] == encoder) & (dataset_data["layer"] == layer)
+    ].copy()
+
+    if layer_encoder_data.empty:
+        return np.nan
+
+    # Extract shift types
+    layer_encoder_data["shift_type"] = layer_encoder_data["shift_name"].apply(
+        extract_shift_type
+    )
+
+    # Group by shift type
+    shift_types = layer_encoder_data["shift_type"].unique()
+    if len(shift_types) < 2:
+        return np.nan
+
+    # Get KL divergence values for each shift type
+    group_values = {}
+
+    for shift_type in shift_types:
+        values = (
+            layer_encoder_data[layer_encoder_data["shift_type"] == shift_type][
+                "kl_divergence"
+            ]
+            .dropna()
+            .values
+        )
+        if len(values) > 0:
+            group_values[shift_type] = values
+
+    if len(group_values) < 2:
+        return np.nan
+
+    # Calculate Fisher's discriminant ratio
+    group_means = [np.mean(values) for values in group_values.values()]
+    group_vars = [
+        np.var(values, ddof=1) if len(values) > 1 else 0
+        for values in group_values.values()
+    ]
+
+    # Between-group variance
+    between_var = np.var(group_means, ddof=1) if len(group_means) > 1 else 0
+
+    # Within-group variance
+    within_var = np.mean(group_vars)
+
+    # Fisher's discriminant ratio
+    if within_var > 1e-10:  # Use small threshold instead of exact 0
+        return between_var / within_var
+    else:
+        # If within_var is ~0, check if means are different
+        return (
+            float("inf") if len(set([round(m, 10) for m in group_means])) > 1 else 0.0
+        )
