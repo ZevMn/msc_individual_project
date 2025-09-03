@@ -58,7 +58,7 @@ def run_padchest(model_to_evaluate, encoder_to_evaluate, shift):
     # SimCLR ImageNet:
     _, simclr_imagenet_encoder_output = get_or_save_outputs(
         model_to_evaluate=None,
-        encoder_to_evaluate="simclr_imagenet",
+        encoder_to_evaluate="imagenet",
         val_loader=val_dataloader,
         test_loader=test_dataloader,
         dataset_name="PadChest",
@@ -107,7 +107,7 @@ def run_padchest(model_to_evaluate, encoder_to_evaluate, shift):
                         if comp_final_result == base_final_result
                         else "gender"
                     )
-                    res["final_identified_shift"][idx] = base_final_result.replace(
+                    res.loc[idx, "final_identified_shift"] = base_final_result.replace(
                         "Covariate", f"Covariate ({suffix})"
                     )
                     print(f"Shift is: {res['final_identified_shift'][idx]}")
