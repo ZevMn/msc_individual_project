@@ -63,10 +63,10 @@ if __name__ == "__main__":
 
     # Uncomment as needed to run experiments:
 
-    # print("\nRunning visualisation experiment:\n")
-    # run_visualisation_experiment(
-    #     args.encoder_to_evaluate, args.feat_mode, args.dataset, force_calculation=False
-    # )
+    print("\nRunning visualisation experiment:\n")
+    run_visualisation_experiment(
+        args.encoder_to_evaluate, args.feat_mode, args.dataset, force_calculation=False
+    )
 
     # print("Running shift quantification experiment:\n")
     # run_shift_quantification_experiment(
@@ -78,7 +78,7 @@ if __name__ == "__main__":
     #     args.encoder_to_evaluate, args.feat_mode, args.dataset, force_calculations=False
     # )
 
-    print("Running bootstrap detection rates experiment:\n")
-    run_bootstrap_experiment(
-        args.encoder_to_evaluate, args.feat_mode, args.dataset, force_calculations=False
-    )
+    # print("Running bootstrap detection rates experiment:\n")
+    # run_bootstrap_experiment(
+    #     args.encoder_to_evaluate, args.feat_mode, args.dataset, force_calculations=False
+    # )

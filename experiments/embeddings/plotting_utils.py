@@ -165,6 +165,7 @@ def plot_layer_representations_jointplot(
                     linewidth=0.35,
                     ax=ax_main,
                     legend=False,
+                    rasterized=True
                 )
 
                 # KDE marginals for each category
@@ -406,6 +407,7 @@ def plot_shift_comparison_joint(
                 s=PlotConfig.MARKER_SIZE,
                 ax=ax_main,
                 legend=False,
+                rasterized=True
             )
 
             # KDE marginals
@@ -722,6 +724,16 @@ def plot_all_bootstrap_results(
             dataset=dataset,
             all_results_df=dataset_subset,
         )
+        # plot_pvalue_trends_with_errorbars(
+        #     output_dir=output_dir,
+        #     dataset=dataset,
+        #     all_results_df=dataset_subset,
+        # )
+        # plot_pvalue_trends_summary(
+        #     output_dir=output_dir,
+        #     dataset=dataset,
+        #     all_results_df=dataset_subset,
+        # )
 
 
 def plot_bootstrap_detection_rate_barchart(
@@ -849,7 +861,7 @@ def plot_bootstrap_detection_rate_barchart(
                             "*",
                             ha="center",
                             va="bottom",
-                            fontsize=6.5,
+                            fontsize=8,
                             rotation=0,
                         )
                     if (
@@ -861,7 +873,7 @@ def plot_bootstrap_detection_rate_barchart(
                             f"{rate:.0f}",
                             ha="center",
                             va="bottom",
-                            fontsize=6,
+                            fontsize=5,
                             rotation=0,
                         )
 
@@ -880,7 +892,7 @@ def plot_bootstrap_detection_rate_barchart(
                     rotation=30,
                     ha="right",
                 )
-                ax.set_xlabel("Shift", fontsize=12, labelpad=15)
+                ax.set_xlabel("")
             else:
                 ax.set_xticklabels([])
             ax.set_ylabel(
@@ -1090,6 +1102,7 @@ def plot_bootstrap_detection_rate_heatmap_combined(
         figsize=(n_test_sizes * 6, n_encoders * 4),
         squeeze=False,
     )
+    fig.subplots_adjust(hspace=0.4)
 
     # Create a separate heatmap for each encoder/test_size combination
     for encoder_idx, encoder in enumerate(encoders):
@@ -1107,7 +1120,7 @@ def plot_bootstrap_detection_rate_heatmap_combined(
 
             heatmap_data = subset.pivot_table(
                 index="shift", columns="layer", values="detection_rate", fill_value=0
-            )
+            ) * 100
 
             # Ensure all layers are present in the correct order
             available_layers = [
@@ -1121,7 +1134,7 @@ def plot_bootstrap_detection_rate_heatmap_combined(
             for i in range(heatmap_data.shape[0]):
                 for j in range(heatmap_data.shape[1]):
                     val = heatmap_data.iloc[i, j]
-                    annot_str[i, j] = f"{val:.2f}" if val >= 0.01 else ""
+                    annot_str[i, j] = f"{val:.0f}" if val >= 1 else ""
 
             # Create the heatmap
             sns.heatmap(
@@ -1130,45 +1143,47 @@ def plot_bootstrap_detection_rate_heatmap_combined(
                 fmt="",
                 cmap="Blues",
                 linewidths=0.5,
-                cbar=size_idx
-                == n_test_sizes - 1,  # Only show colorbar on rightmost plot
-                cbar_kws=(
-                    {"label": "Detection Rate"}
-                    if size_idx == n_test_sizes - 1
-                    else None
-                ),
+                cbar=size_idx == n_test_sizes - 1,
+                cbar_kws={
+                    "label": "Detection Rate (%)",
+                    "pad": 0.05,
+                } if size_idx == n_test_sizes - 1 else None,
+                annot_kws={"fontsize": 14},
                 ax=ax,
                 vmin=0,
-                vmax=1,
+                vmax=100,
             )
-
+            ax.figure.axes[-1].yaxis.label.set_size(12)
+            
             # Labels and formatting
             if encoder_idx == n_encoders - 1:  # Bottom row
                 clean_layer_labels = [
                     layer.replace("_", " ").title() for layer in available_layers
                 ]
-                ax.set_xticklabels(clean_layer_labels, rotation=45, ha="right")
-                ax.set_xlabel("Layer", fontsize=10)
+                ax.set_xticklabels(clean_layer_labels, rotation=45, ha="right", fontsize=13)
+                ax.set_xlabel("")
             else:
                 ax.set_xticklabels([])
                 ax.set_xlabel("")
 
             if size_idx == 0:  # Leftmost column
-                clean_shift_labels = [str(shift) for shift in heatmap_data.index]
-                ax.set_yticklabels(clean_shift_labels, rotation=0)
-                ax.set_ylabel("Shift", fontsize=10)
+                clean_shift_labels = [
+                    str(shift).replace("_", " ").title() for shift in heatmap_data.index
+                ]
+                ax.set_yticklabels(clean_shift_labels, rotation=0, fontsize=13)
+                ax.set_ylabel("")
             else:
                 ax.set_yticklabels([])
                 ax.set_ylabel("")
 
             title = f"{encoder.replace('_', ' ').title()}\n{test_size} samples"
-            ax.set_title(title, fontsize=10, fontweight="bold")
+            ax.set_title(title, fontsize=16, fontweight="bold")
 
     fig.suptitle(
-        f"Bootstrap Detection Rate Heatmaps: {dataset.replace('Mammo', 'EMBED')}",
-        fontsize=16,
+        f"{dataset.replace('Mammo', 'EMBED')} - Bootstrap Detection Rate Heatmaps",
+        fontsize=26,
         fontweight="bold",
-        y=0.98,
+        y=0.97,
     )
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -1177,6 +1192,272 @@ def plot_bootstrap_detection_rate_heatmap_combined(
     fig.savefig(filepath, dpi=400, bbox_inches="tight", facecolor="white")
     plt.close(fig)
     print(f"[Saved] {filename}")
+
+
+def plot_pvalue_trends_with_errorbars(
+    output_dir: Path,
+    dataset: str,
+    all_results_df: pd.DataFrame,
+) -> None:
+    """
+    Plots mean p-value vs. test size with error bars (std of p-value),
+    grouped by layer. Creates one subplot per (shift, encoder) pair.
+
+    Args:
+        output_dir: Directory to save the plot
+        dataset: Name of the dataset to plot results for
+        all_results_df: DataFrame containing bootstrap results with columns:
+                   ['dataset', 'encoder', 'shift', 'layer', 'test_size', 'mean_pvalue', 'std_pvalue']
+
+    Saves: f"bootstrap_pvalue_trends_{dataset}.png"
+    """
+    
+    # Set style for cleaner plots
+    plt.style.use('default')
+    sns.set_palette("husl")
+    
+    # Check if required columns are present
+    required = {"encoder", "layer", "shift", "test_size", "mean_pvalue", "std_pvalue"}
+    missing = required - set(all_results_df.columns)
+    if missing:
+        raise ValueError(f"Missing columns in all_results_df: {missing}")
+    
+    # Filter for the specific dataset
+    dataset_df = all_results_df[all_results_df["dataset"] == dataset].copy()
+    if dataset_df.empty:
+        print(f"No data found for dataset: {dataset}")
+        return
+    
+    shifts = sorted(dataset_df["shift"].unique())
+    encoders = sorted(dataset_df["encoder"].unique())
+    layers = ["after_maxpool", "layer_1", "layer_2", "layer_3", "final_layer"]
+    
+    # Define a more sophisticated color palette
+    colors = ['#2E86AB', '#A23B72', '#F18F01', '#C73E1D', '#592E83']
+    layer_colors = {layer: colors[i] for i, layer in enumerate(layers)}
+    
+    # Clean up labels
+    def clean_label(text):
+        return text.replace("_", " ").title().replace("Simclr", "SimCLR")
+    
+    # Calculate figure size based on number of subplots
+    nrows = len(shifts)
+    ncols = len(encoders)
+    fig_width = max(16, 4 * ncols)
+    fig_height = max(12, 3.5 * nrows)
+    
+    fig, axes = plt.subplots(
+        nrows=nrows,
+        ncols=ncols,
+        figsize=(fig_width, fig_height),
+        sharey=True,
+        gridspec_kw={"hspace": 0.35, "wspace": 0.15}
+    )
+
+    # Handle different subplot configurations
+    if nrows == 1 and ncols == 1:
+        axes = np.array([[axes]])
+    elif nrows == 1:
+        axes = np.array([axes])
+    elif ncols == 1:
+        axes = np.array([[ax] for ax in axes])
+
+    # Track which layers actually have data for legend
+    layers_with_data = set()
+    
+    for i, shift in enumerate(shifts):
+        for j, encoder in enumerate(encoders):
+            ax = axes[i, j]
+            subset = dataset_df[
+                (dataset_df["shift"] == shift) &
+                (dataset_df["encoder"] == encoder)
+            ]
+
+            if subset.empty:
+                ax.set_visible(False)
+                continue
+
+            # Plot one line per layer with error bars
+            for layer in layers:
+                layer_df = subset[subset["layer"] == layer]
+                if layer_df.empty:
+                    continue
+                    
+                layers_with_data.add(layer)
+                layer_df = layer_df.sort_values("test_size")
+                
+                # Use smaller error bars and more refined styling
+                ax.errorbar(
+                    layer_df["test_size"],
+                    layer_df["mean_pvalue"],
+                    yerr=layer_df["std_pvalue"],
+                    marker="o",
+                    capsize=2,
+                    capthick=1.5,
+                    color=layer_colors[layer],
+                    label=clean_label(layer),
+                    linewidth=2.5,
+                    markersize=5,
+                    markeredgewidth=0.5,
+                    markeredgecolor='white',
+                    alpha=0.9
+                )
+
+            # Add significance threshold line with better styling
+            ax.axhline(0.05, color="#E74C3C", linestyle="--", alpha=0.8, linewidth=2)
+            
+            # Position the p=0.05 label more elegantly
+            xlim = ax.get_xlim()
+            ax.text(xlim[1] * 0.02, 0.08, "p = 0.05", 
+                   ha="left", va="bottom", color="#E74C3C", 
+                   fontsize=10, fontweight='bold',
+                   bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.8))
+            
+            # Improved title formatting
+            shift_clean = clean_label(shift)
+            encoder_clean = clean_label(encoder)
+            ax.set_title(f"{shift_clean} | {encoder_clean}", 
+                        fontsize=13, fontweight="bold", pad=12)
+            
+            # Axis labels only on edges
+            if i == nrows - 1:  # Bottom row
+                ax.set_xlabel("Test Size", fontsize=11, fontweight='semibold')
+            if j == 0:  # Leftmost column
+                ax.set_ylabel("Mean p-value ± std", fontsize=11, fontweight='semibold')
+            
+            # Improved y-axis formatting
+            ax.set_yscale('log')
+            ax.grid(True, alpha=0.2, linestyle='-', linewidth=0.5)
+            ax.set_ylim(1e-6, 2)  # Slightly more space at top
+            
+            # Better tick formatting
+            ax.tick_params(axis='both', which='major', labelsize=9)
+            ax.tick_params(axis='both', which='minor', labelsize=8)
+            
+            # Remove top and right spines for cleaner look
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.spines['left'].set_linewidth(0.8)
+            ax.spines['bottom'].set_linewidth(0.8)
+
+    # Add a single legend outside the plot area
+    if layers_with_data:
+        # Create legend handles only for layers that have data
+        legend_handles = []
+        legend_labels = []
+        for layer in layers:
+            if layer in layers_with_data:
+                legend_handles.append(mlines.Line2D([0], [0], color=layer_colors[layer], 
+                                               marker='o', linestyle='-', linewidth=2.5, markersize=6))
+                legend_labels.append(clean_label(layer))
+        
+        # Position legend outside the plot
+        fig.legend(legend_handles, legend_labels, 
+                  loc='center right', bbox_to_anchor=(0.98, 0.5),
+                  fontsize=11, frameon=True, shadow=True,
+                  title="Network Layer", title_fontsize=12, title_fontweight='bold')
+
+    # Enhanced overall title
+    dataset_clean = dataset.replace('Mammo', 'EMBED').replace('_', ' ')
+    fig.suptitle(
+        f"{dataset_clean} - Bootstrap P-value Analysis",
+        fontsize=18,
+        fontweight="bold",
+        y=0.95
+    )
+
+    # Adjust layout to accommodate legend
+    plt.subplots_adjust(right=0.85)
+
+    # Save the plot with high quality
+    output_dir.mkdir(parents=True, exist_ok=True)
+    file_name = f"bootstrap_pvalue_trends_{dataset}_enhanced.png"
+    filepath = output_dir / file_name
+    fig.savefig(filepath, dpi=300, bbox_inches="tight", facecolor="white", 
+                edgecolor='none', format='png', pil_kwargs={'quality': 95})
+    plt.close(fig)
+    print(f"[Saved] {file_name}")
+
+
+def plot_pvalue_trends_summary(
+    output_dir: Path,
+    dataset: str,
+    all_results_df: pd.DataFrame,
+) -> None:
+    """
+    Creates a summary plot showing only the most significant results
+    to avoid overcrowding when there are many subplots.
+    """
+    
+    # Filter for the specific dataset
+    dataset_df = all_results_df[all_results_df["dataset"] == dataset].copy()
+    if dataset_df.empty:
+        print(f"No data found for dataset: {dataset}")
+        return
+    
+    # Find the most interesting conditions (those with lowest p-values)
+    summary_stats = dataset_df.groupby(['shift', 'encoder', 'layer']).agg({
+        'mean_pvalue': 'min'
+    }).reset_index()
+    
+    # Select top conditions that show significant results
+    significant = summary_stats[summary_stats['mean_pvalue'] < 0.1]
+    
+    if significant.empty:
+        print(f"No significant results found for {dataset}")
+        return
+        
+    # Create a focused plot with only the most interesting results
+    fig, ax = plt.subplots(figsize=(12, 8))
+    
+    colors = ['#2E86AB', '#A23B72', '#F18F01', '#C73E1D', '#592E83']
+    layer_colors = {layer: colors[i] for i, layer in enumerate(
+        ["after_maxpool", "layer_1", "layer_2", "layer_3", "final_layer"])}
+    
+    for idx, (_, row) in enumerate(significant.iterrows()):
+        subset = dataset_df[
+            (dataset_df['shift'] == row['shift']) &
+            (dataset_df['encoder'] == row['encoder']) &
+            (dataset_df['layer'] == row['layer'])
+        ].sort_values('test_size')
+        
+        if subset.empty:
+            continue
+            
+        label = f"{row['shift'].replace('_', ' ')} | {row['encoder'].replace('_', ' ')} | {row['layer'].replace('_', ' ')}"
+        
+        ax.errorbar(
+            subset["test_size"],
+            subset["mean_pvalue"],
+            yerr=subset["std_pvalue"],
+            marker="o",
+            capsize=3,
+            label=label,
+            linewidth=2,
+            markersize=6,
+            alpha=0.8
+        )
+    
+    ax.axhline(0.05, color="#E74C3C", linestyle="--", alpha=0.8, linewidth=2)
+    ax.text(ax.get_xlim()[1] * 0.02, 0.08, "p = 0.05", 
+           ha="left", va="bottom", color="#E74C3C", 
+           fontsize=10, fontweight='bold')
+    
+    ax.set_xlabel("Test Size", fontsize=12, fontweight='semibold')
+    ax.set_ylabel("Mean p-value ± std", fontsize=12, fontweight='semibold')
+    ax.set_yscale('log')
+    ax.grid(True, alpha=0.3)
+    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    
+    plt.title(f"{dataset.replace('Mammo', 'EMBED')} - Significant Results Summary", 
+              fontsize=16, fontweight="bold", pad=20)
+    
+    # Save summary plot
+    file_name = f"bootstrap_pvalue_summary_{dataset}.png"
+    filepath = output_dir / file_name
+    fig.savefig(filepath, dpi=300, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    print(f"[Saved] {file_name}")
 
 
 def plot_kl_panels_multi_layer(input_dir: Path, output_dir: Path) -> None:
@@ -1281,8 +1562,8 @@ def plot_kl_panels_multi_layer(input_dir: Path, output_dir: Path) -> None:
 
     # Create panel plot for each dataset
     for dataset in datasets:
-        # Use 2x3 layout instead to give more space for each subplot
-        fig, axes = plt.subplots(2, 3, figsize=(20, 12))
+        # Use 3x2 layout
+        fig, axes = plt.subplots(3, 2, figsize=(16, 20))
 
         dataset_data = df[df["dataset"] == dataset]
 
@@ -1295,8 +1576,8 @@ def plot_kl_panels_multi_layer(input_dir: Path, output_dir: Path) -> None:
 
         # Plot each layer
         for layer_idx, layer in enumerate(layers):
-            row = layer_idx // 3
-            col = layer_idx % 3
+            row = layer_idx // 2
+            col = layer_idx % 2
             ax = axes[row, col]
 
             layer_data = dataset_data[dataset_data["layer"] == layer]
@@ -1388,10 +1669,10 @@ def plot_kl_panels_multi_layer(input_dir: Path, output_dir: Path) -> None:
             ax.set_xticks(x_positions)
             # Rotate labels more and use smaller font
             ax.set_xticklabels(readable_labels, rotation=60, ha="right", fontsize=8)
-            ax.set_ylabel("KL Divergence", fontweight="bold", labelpad=15, fontsize=16)
+            ax.set_ylabel("KL Divergence", fontweight="bold", labelpad=20, fontsize=18)
             ax.set_title(
                 layer_display_names[layer],
-                fontsize=18,
+                fontsize=20,
                 fontweight="bold",
                 pad=20,
                 color="#2E2E2E",
@@ -1420,83 +1701,85 @@ def plot_kl_panels_multi_layer(input_dir: Path, output_dir: Path) -> None:
                 spine.set_linewidth(1.2)
                 spine.set_color("#dddddd")
 
-        # Create separability heatmap in the 6th position (bottom right)
-        ax_heatmap = axes[1, 2]
+        # # Create separability heatmap in the 6th position (bottom right)
+        # ax_heatmap = axes[1, 2]
 
-        # Calculate separability scores for all encoder-layer combinations
-        separability_matrix = np.zeros((len(layers), len(encoders)))
-        for layer_idx, layer in enumerate(layers):
-            for encoder_idx, encoder in enumerate(encoders):
-                score = calculate_separability_score(dataset_data, encoder, layer)
-                separability_matrix[layer_idx, encoder_idx] = score
+        # # Calculate separability scores for all encoder-layer combinations
+        # separability_matrix = np.zeros((len(layers), len(encoders)))
+        # for layer_idx, layer in enumerate(layers):
+        #     for encoder_idx, encoder in enumerate(encoders):
+        #         score = calculate_separability_score(dataset_data, encoder, layer)
+        #         separability_matrix[layer_idx, encoder_idx] = score
 
-        # Create heatmap
-        im = ax_heatmap.imshow(separability_matrix, cmap="RdYlBu_r", aspect="auto")
+        # # Create heatmap
+        # im = ax_heatmap.imshow(separability_matrix, cmap="RdYlBu_r", aspect="auto")
 
-        # Set ticks and labels
-        ax_heatmap.set_xticks(range(len(encoders)))
-        ax_heatmap.set_yticks(range(len(layers)))
-        ax_heatmap.set_xticklabels(
-            [
-                enc.replace("_", " ").replace("simclr", "SimCLR").title()
-                for enc in encoders
-            ],
-            rotation=45,
-            ha="right",
-            fontsize=9,
-        )
-        ax_heatmap.set_yticklabels(
-            [layer_display_names[layer] for layer in layers], fontsize=9
-        )
+        # # Set ticks and labels
+        # ax_heatmap.set_xticks(range(len(encoders)))
+        # ax_heatmap.set_yticks(range(len(layers)))
+        # ax_heatmap.set_xticklabels(
+        #     [
+        #         enc.replace("_", " ").replace("simclr", "SimCLR").title()
+        #         for enc in encoders
+        #     ],
+        #     rotation=45,
+        #     ha="right",
+        #     fontsize=9,
+        # )
+        # ax_heatmap.set_yticklabels(
+        #     [layer_display_names[layer] for layer in layers], fontsize=9
+        # )
 
-        # Add colorbar
-        cbar = plt.colorbar(im, ax=ax_heatmap, shrink=0.8)
-        cbar.set_label(
-            "Separability Score\n(Fisher Ratio)",
-            rotation=270,
-            labelpad=30,
-            fontsize=14,
-            fontweight="bold",
-        )
+        # # Add colorbar
+        # cbar = plt.colorbar(im, ax=ax_heatmap, shrink=0.8)
+        # cbar.set_label(
+        #     "Separability Score\n(Fisher Ratio)",
+        #     rotation=270,
+        #     labelpad=30,
+        #     fontsize=14,
+        #     fontweight="bold",
+        # )
 
-        # Add text annotations with separability scores
-        for layer_idx in range(len(layers)):
-            for encoder_idx in range(len(encoders)):
-                score = separability_matrix[layer_idx, encoder_idx]
-                if not np.isnan(score):
-                    if score == float("inf"):
-                        text = "∞"
-                    else:
-                        text = f"{score:.2f}"
-                    color = (
-                        "white" if score > np.nanmean(separability_matrix) else "black"
-                    )
-                    ax_heatmap.text(
-                        encoder_idx,
-                        layer_idx,
-                        text,
-                        ha="center",
-                        va="center",
-                        color=color,
-                        fontweight="bold",
-                        fontsize=8,
-                    )
+        # # Add text annotations with separability scores
+        # for layer_idx in range(len(layers)):
+        #     for encoder_idx in range(len(encoders)):
+        #         score = separability_matrix[layer_idx, encoder_idx]
+        #         if not np.isnan(score):
+        #             if score == float("inf"):
+        #                 text = "∞"
+        #             else:
+        #                 text = f"{score:.2f}"
+        #             color = (
+        #                 "white" if score > np.nanmean(separability_matrix) else "black"
+        #             )
+        #             ax_heatmap.text(
+        #                 encoder_idx,
+        #                 layer_idx,
+        #                 text,
+        #                 ha="center",
+        #                 va="center",
+        #                 color=color,
+        #                 fontweight="bold",
+        #                 fontsize=8,
+        #             )
 
-        ax_heatmap.set_title(
-            "Shift Type Separability",
-            fontsize=16,
-            fontweight="bold",
-            pad=20,
-            color="#2E2E2E",
-        )
+        # ax_heatmap.set_title(
+        #     "Shift Type Separability",
+        #     fontsize=16,
+        #     fontweight="bold",
+        #     pad=20,
+        #     color="#2E2E2E",
+        # )
 
-        # Enhanced appearance for heatmap
-        ax_heatmap.set_facecolor("#fdfdfd")
-        for spine in ax_heatmap.spines.values():
-            spine.set_linewidth(1.2)
-            spine.set_color("#dddddd")
+        # # Enhanced appearance for heatmap
+        # ax_heatmap.set_facecolor("#fdfdfd")
+        # for spine in ax_heatmap.spines.values():
+        #     spine.set_linewidth(1.2)
+        #     spine.set_color("#dddddd")
 
         # Create horizontal legend at the bottom
+        axes[2, 1].set_visible(False)
+
         legend_handles = []
         for encoder in encoders:
             display_name = encoder.replace("_", " ").replace("simclr", "SimCLR").title()
@@ -1523,8 +1806,8 @@ def plot_kl_panels_multi_layer(input_dir: Path, output_dir: Path) -> None:
             loc="lower center",
             ncol=len(encoders),
             bbox_to_anchor=(0.5, 0.02),
-            fontsize=12,
-            title_fontsize=14,
+            fontsize=16,
+            title_fontsize=18,
             frameon=True,
             fancybox=True,
             shadow=True,
@@ -1533,19 +1816,19 @@ def plot_kl_panels_multi_layer(input_dir: Path, output_dir: Path) -> None:
         )
 
         fig.suptitle(
-            f"KL Divergence Across Encoder Layers: {dataset.replace('Mammo', 'EMBED')}",
-            fontsize=20,
+            f"{dataset.replace('Mammo', 'EMBED')} - KL Divergence Across Encoder Layers",
+            fontsize=24,
             fontweight="bold",
-            y=0.95,
+            y=0.94,
             color="#2E2E2E",
         )
 
         fig.text(
             0.5,
-            0.91,
+            0.90,
             "Dataset shift sensitivity by encoder and layer depth",
             ha="center",
-            fontsize=13,
+            fontsize=18,
             style="italic",
             color="#666666",
         )
