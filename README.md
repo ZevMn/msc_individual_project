@@ -86,3 +86,31 @@ Here we detail the full workflow to reproduce all shift identification results f
     
 5. Plot the results with `plot_all_results.ipynb`
 
+#### Additional embedding analysis experiments
+
+For detailed shift analysis across different encoder layers and datasets, use the embeddings experiments:
+
+**Example usage:**
+```bash
+# Run with defaults (ImageNet encoder, all layers, Mammo dataset)
+python experiments/embeddings/main.py
+
+# Override specific settings
+python experiments/embeddings/main.py \
+    --encoder_to_evaluate simclr_imagenet \
+    --feat_mode early \
+    --dataset PadChest
+```
+
+**Available options:**
+- `--encoder_to_evaluate`: Choose from `imagenet`, `simclr_imagenet`, `random`, or `simclr_modality_specific`
+- `--feat_mode`: Choose from `final` (final layer only), `early` (early layers), or `all` (all layers)
+- `--dataset`: Choose from `Mammo`, `Retina`, `RSNA`, or `PadChest`
+
+**PadChest-specific experiments:**
+For comprehensive PadChest shift identification across all shift types:
+```bash
+python experiments/embeddings/padchest_all_improved.py
+```
+
+**Note:** If you change `feat_mode` after embeddings are cached, delete the corresponding `*.pkl` files before re-running to avoid feature mismatch.
