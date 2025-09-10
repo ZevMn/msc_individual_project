@@ -1,6 +1,4 @@
-# Automatic dataset shift identification to support root cause analysis of AI performance drift
-
-This repository contains the code associated with the paper [Automatic dataset shift identification to support root cause analysis of AI performance drift](https://arxiv.org/abs/2411.07940). 
+# Multi-Layer Feature Monitoring for Improved Detection and Identification of Covariate Shift in Medical Imaging
 
 ## Overview
 The code is divided into the following main folders:
@@ -8,7 +6,8 @@ The code is divided into the following main folders:
 * [configs](configs/) contains all the experiment configurations for training the above models.
 * [data_handling](data_handling) everything related to data loading (dataset, data modules, augmentations etc.)
 * [shift_identification](shift_identification) contains all the necessary tools for dataset shift detection (BBSD tests, MMD tests) and identification (prevalence shift estimation, shift identification) 
-* [experiments](experiments/) all the code related to experiments presented in the paper: inference code for each dataset group, shift generation code and plotting notebooks. 
+* [experiments](experiments/) all the code related to experiments presented in the paper: inference code for each dataset group, shift generation code and plotting notebooks.
+* [embeddings](experiments/embeddings) additional experiments and plotting functions for analysis of: feature representations, shift comparisons, and detection rates, as well as an extension to the Duo framework for covariate shift identification.
 
 
 ## Important pre-requisites
